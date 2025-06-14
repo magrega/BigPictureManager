@@ -1,4 +1,6 @@
-﻿using System;
+﻿using AudioSwitcher.AudioApi.CoreAudio;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -60,6 +62,10 @@ namespace BigPictureManager
         public Form1()
         {
             InitializeComponent();
+
+
+
+
         }
 
         private async void button1_Click(object sender, EventArgs e)
@@ -109,17 +115,32 @@ namespace BigPictureManager
 
             await TurnOffBluetoothAsync();
 
-            //IEnumerable<CoreAudioDevice> devices = new CoreAudioController().GetPlaybackDevices();
+            IEnumerable<CoreAudioDevice> devices = new CoreAudioController().GetPlaybackDevices();
 
-            //foreach (CoreAudioDevice d in devices)
-            //{
-            //    if (!d.IsDefaultDevice)
-            //    {
-            //        Console.WriteLine(d.FullName);
-            //        d.SetAsDefault();
-            //        return;
-            //    }
-            //}
+            foreach (CoreAudioDevice d in devices)
+            {
+                if (!d.IsDefaultDevice)
+                {
+                    Console.WriteLine(d.FullName);
+                    d.SetAsDefault();
+                    return;
+                }
+            }
+
+        }
+
+        private async void Form1_Load(object sender, EventArgs e)
+        {
+
+            IEnumerable<CoreAudioDevice> devices = new CoreAudioController().GetPlaybackDevices();
+
+            foreach (CoreAudioDevice d in devices)
+            {
+
+                Console.WriteLine(d.FullName);
+                audioDeviceList.Items.Add(d.FullName);
+
+            }
 
         }
     }
