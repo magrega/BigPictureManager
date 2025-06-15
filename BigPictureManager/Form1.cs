@@ -1,22 +1,22 @@
-﻿using AudioSwitcher.AudioApi.CoreAudio;
+﻿using AudioSwitcher.AudioApi;
+using AudioSwitcher.AudioApi.CoreAudio;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Management; 
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
 
-
-
 namespace BigPictureManager
 {
 
-
     public partial class Form1 : Form
     {
+
 
         public async Task<bool> TurnOffBluetoothAsync()
         {
@@ -63,9 +63,6 @@ namespace BigPictureManager
         {
             InitializeComponent();
 
-
-
-
         }
 
         private async void button1_Click(object sender, EventArgs e)
@@ -79,15 +76,14 @@ namespace BigPictureManager
                 return processes.Length > 0;
             }
 
-            // Usage:
-            //if (IsProcessRunning("notepad"))
-            //{
-            //    Console.WriteLine("Notepad is running!");
-            //}
-            //else
-            //{
-            //    Console.WriteLine("Notepad is NOT running.");
-            //}
+            if (IsProcessRunning("notepad"))
+            {
+                Console.WriteLine("Notepad is running!");
+            }
+            else
+            {
+                Console.WriteLine("Notepad is NOT running.");
+            }
 
 
 
@@ -129,19 +125,42 @@ namespace BigPictureManager
 
         }
 
-        private async void Form1_Load(object sender, EventArgs e)
+        private void Form1_Load(object sender, EventArgs ev)
         {
+            IEnumerable<CoreAudioDevice> devices = new CoreAudioController().GetPlaybackDevices().Where(d => d.State == DeviceState.Active);
 
-            IEnumerable<CoreAudioDevice> devices = new CoreAudioController().GetPlaybackDevices();
-
+            audioDeviceList.SelectedItem = devices.ElementAt(0);
+            audioDeviceList.SelectedText = devices.ElementAt(0).FullName;
+            audioDeviceList.ValueMember = "FullName";
             foreach (CoreAudioDevice d in devices)
             {
-
-                Console.WriteLine(d.FullName);
-                audioDeviceList.Items.Add(d.FullName);
+                audioDeviceList.Items.Add(d);
 
             }
 
+            var startWatcher = new ManagementEventWatcher(
+                    new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='notepad.exe'"));
+                startWatcher.EventArrived += (s, e) =>
+                {
+                    Console.WriteLine($"Notepad started! PID: {e.NewEvent["ProcessID"]}");
+                    devices.ElementAt(0).SetAsDefault();
+                };
+
+                
+                var stopWatcher = new ManagementEventWatcher(
+                    new WqlEventQuery("SELECT * FROM Win32_ProcessStopTrace WHERE ProcessName='notepad.exe'"));
+            stopWatcher.EventArrived += (s, e) =>
+            {
+                devices.ElementAt(1).SetAsDefault();
+                Console.WriteLine($"Stopped: {e.NewEvent["ProcessName"]}");
+            };
+
+                startWatcher.Start();
+                stopWatcher.Start();
+            
+
+
+          
         }
     }
 }
