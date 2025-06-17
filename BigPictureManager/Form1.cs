@@ -2,27 +2,20 @@
 using AudioSwitcher.AudioApi.CoreAudio;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Management; 
+using System.Management;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Windows.Devices.Bluetooth;
-using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
 
 namespace BigPictureManager
 {
-
     public partial class Form1 : Form
     {
-
-
         public async Task<bool> TurnOffBluetoothAsync()
         {
             try
             {
-                // Request access to radios
                 var access = await Radio.RequestAccessAsync();
                 if (access != RadioAccessStatus.Allowed)
                 {
@@ -30,10 +23,7 @@ namespace BigPictureManager
                     return false;
                 }
 
-                // Get all radios
                 var radios = await Radio.GetRadiosAsync();
-
-                // Find the Bluetooth radio
                 var bluetoothRadio = radios.FirstOrDefault(radio => radio.Kind == RadioKind.Bluetooth);
 
                 if (bluetoothRadio == null)
@@ -42,7 +32,6 @@ namespace BigPictureManager
                     return false;
                 }
 
-                // Turn off Bluetooth
                 if (bluetoothRadio.State != RadioState.Off)
                 {
                     await bluetoothRadio.SetStateAsync(RadioState.Off);
@@ -59,108 +48,53 @@ namespace BigPictureManager
                 return false;
             }
         }
-        public Form1()
-        {
-            InitializeComponent();
 
-        }
-
-        private async void button1_Click(object sender, EventArgs e)
-        {
-
-
-
-            bool IsProcessRunning(string processName)
-            {
-                Process[] processes = Process.GetProcessesByName(processName);
-                return processes.Length > 0;
-            }
-
-            if (IsProcessRunning("notepad"))
-            {
-                Console.WriteLine("Notepad is running!");
-            }
-            else
-            {
-                Console.WriteLine("Notepad is NOT running.");
-            }
-
-
-
-
-            async Task DisconnectBluetoothDeviceAsync()
-            {
-                // Find the Bluetooth device
-                string deviceSelector = BluetoothDevice.GetDeviceSelector();
-                DeviceInformationCollection bTdevices = await DeviceInformation.FindAllAsync(deviceSelector);
-
-                DeviceInformationCollection PairedBluetoothDevices =
-       await DeviceInformation.FindAllAsync(BluetoothDevice.GetDeviceSelectorFromPairingState(true));
-
-
-                foreach (DeviceInformation d in PairedBluetoothDevices)
-                {
-                    Console.WriteLine(d.Name);
-                }
-
-
-                // Disconnect
-                //bluetoothDevice.Dispose(); // Releases the connection
-                //Console.WriteLine($"Disconnected: {targetDevice.Name}");
-            }
-
-            await TurnOffBluetoothAsync();
-
-            IEnumerable<CoreAudioDevice> devices = new CoreAudioController().GetPlaybackDevices();
-
-            foreach (CoreAudioDevice d in devices)
-            {
-                if (!d.IsDefaultDevice)
-                {
-                    Console.WriteLine(d.FullName);
-                    d.SetAsDefault();
-                    return;
-                }
-            }
-
-        }
+        public Form1() { InitializeComponent(); }
 
         private void Form1_Load(object sender, EventArgs ev)
         {
-            IEnumerable<CoreAudioDevice> devices = new CoreAudioController().GetPlaybackDevices().Where(d => d.State == DeviceState.Active);
+            var controller = new CoreAudioController();
+            IEnumerable<CoreAudioDevice> devices = controller.GetPlaybackDevices().Where(d => d.State == DeviceState.Active);
 
             audioDeviceList.SelectedItem = devices.ElementAt(0);
             audioDeviceList.SelectedText = devices.ElementAt(0).FullName;
             audioDeviceList.ValueMember = "FullName";
-            foreach (CoreAudioDevice d in devices)
+
+            foreach (CoreAudioDevice d in devices) { audioDeviceList.Items.Add(d); }
+            CoreAudioDevice prevDevice = devices.ElementAt(0);
+
+            string getProcessQuery = "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='notepad.exe'";
+            var startWatcher = new ManagementEventWatcher(new WqlEventQuery(getProcessQuery));
+
+            startWatcher.EventArrived += (s, e) =>
             {
-                audioDeviceList.Items.Add(d);
-
-            }
-
-            var startWatcher = new ManagementEventWatcher(
-                    new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='notepad.exe'"));
-                startWatcher.EventArrived += (s, e) =>
+                Console.WriteLine($"Notepad started! PID: {e.NewEvent["ProcessID"]}");
+                if (audioDeviceList.InvokeRequired)
                 {
-                    Console.WriteLine($"Notepad started! PID: {e.NewEvent["ProcessID"]}");
-                    devices.ElementAt(0).SetAsDefault();
-                };
+                    audioDeviceList.Invoke((MethodInvoker)delegate
+                    {
+                        if (audioDeviceList.SelectedItem is CoreAudioDevice selectedDevice)
+                        {
+                            prevDevice = controller.DefaultPlaybackDevice;
+                            selectedDevice.SetAsDefault();
+                        }
+                    });
+                }
+            };
 
-                
-                var stopWatcher = new ManagementEventWatcher(
-                    new WqlEventQuery("SELECT * FROM Win32_ProcessStopTrace WHERE ProcessName='notepad.exe'"));
-            stopWatcher.EventArrived += (s, e) =>
+            string stopProcessQuery = "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='notepad.exe'";
+            var stopWatcher = new ManagementEventWatcher(new WqlEventQuery(stopProcessQuery));
+            stopWatcher.EventArrived += async (s, e) =>
             {
                 devices.ElementAt(1).SetAsDefault();
+                prevDevice.SetAsDefault();
+
+                if (turnOffBT.Checked) { await TurnOffBluetoothAsync(); }
                 Console.WriteLine($"Stopped: {e.NewEvent["ProcessName"]}");
             };
 
-                startWatcher.Start();
-                stopWatcher.Start();
-            
-
-
-          
+            startWatcher.Start();
+            stopWatcher.Start();
         }
     }
 }
