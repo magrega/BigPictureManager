@@ -1,7 +1,6 @@
 ﻿using AudioSwitcher.AudioApi;
 using AudioSwitcher.AudioApi.CoreAudio;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Management;
 using System.Threading.Tasks;
@@ -51,20 +50,22 @@ namespace BigPictureManager
 
         public Form1() { InitializeComponent(); }
 
+        public ManagementEventWatcher startWatcher = new ManagementEventWatcher(
+                new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='notepad.exe'"));
+
+        public ManagementEventWatcher stopWatcher = new ManagementEventWatcher(
+                  new WqlEventQuery("SELECT * FROM Win32_ProcessStopTrace WHERE ProcessName='notepad.exe'"));
         private void Form1_Load(object sender, EventArgs ev)
         {
             var controller = new CoreAudioController();
-            IEnumerable<CoreAudioDevice> devices = controller.GetPlaybackDevices().Where(d => d.State == DeviceState.Active);
+            var devices = controller.GetPlaybackDevices()
+                .Where(d => d.State == DeviceState.Active)
+                .ToList();
 
-            audioDeviceList.SelectedItem = devices.ElementAt(0);
-            audioDeviceList.SelectedText = devices.ElementAt(0).FullName;
-            audioDeviceList.ValueMember = "FullName";
+            audioDeviceList.DataSource = devices;
+            audioDeviceList.DisplayMember = "FullName";
+            CoreAudioDevice prevDevice = controller.DefaultPlaybackDevice;
 
-            foreach (CoreAudioDevice d in devices) { audioDeviceList.Items.Add(d); }
-            CoreAudioDevice prevDevice = devices.ElementAt(0);
-
-            string getProcessQuery = "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='notepad.exe'";
-            var startWatcher = new ManagementEventWatcher(new WqlEventQuery(getProcessQuery));
 
             startWatcher.EventArrived += (s, e) =>
             {
@@ -82,19 +83,22 @@ namespace BigPictureManager
                 }
             };
 
-            string stopProcessQuery = "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='notepad.exe'";
-            var stopWatcher = new ManagementEventWatcher(new WqlEventQuery(stopProcessQuery));
             stopWatcher.EventArrived += async (s, e) =>
             {
-                devices.ElementAt(1).SetAsDefault();
                 prevDevice.SetAsDefault();
-
                 if (turnOffBT.Checked) { await TurnOffBluetoothAsync(); }
                 Console.WriteLine($"Stopped: {e.NewEvent["ProcessName"]}");
             };
 
             startWatcher.Start();
             stopWatcher.Start();
+        }
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            startWatcher?.Stop();
+            stopWatcher?.Stop();
+            startWatcher?.Dispose();
+            stopWatcher?.Dispose();
         }
     }
 }
