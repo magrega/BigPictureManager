@@ -1,9 +1,11 @@
 ﻿using AudioSwitcher.AudioApi;
 using AudioSwitcher.AudioApi.CoreAudio;
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Management;
 using System.Threading.Tasks;
+using System.Windows.Automation;
 using System.Windows.Forms;
 using Windows.Devices.Radios;
 
@@ -47,14 +49,32 @@ namespace BigPictureManager
                 return false;
             }
         }
+        private static bool OnWindowOpened(object sender, AutomationEventArgs automationEventArgs)
+        {
+            try
+            {
+                var element = sender as AutomationElement;
+                if (element != null && element.Current.Name == "Steam Big Picture Mode")
+                {
+                    Console.WriteLine("{0} started!", element.Current.Name);
+                    return true;
+                }
+                return false;
+            }
+            catch (ElementNotAvailableException)
+            {
+                return false;
+
+            }
+        }
+
 
         public Form1() { InitializeComponent(); }
 
-        public ManagementEventWatcher startWatcher = new ManagementEventWatcher(
-                new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='notepad.exe'"));
 
         public ManagementEventWatcher stopWatcher = new ManagementEventWatcher(
-                  new WqlEventQuery("SELECT * FROM Win32_ProcessStopTrace WHERE ProcessName='notepad.exe'"));
+                  new WqlEventQuery("SELECT * FROM Win32_ProcessStopTrace WHERE ProcessName='steamwebhelper.exe'"));
+
         private void Form1_Load(object sender, EventArgs ev)
         {
             var controller = new CoreAudioController();
@@ -67,31 +87,46 @@ namespace BigPictureManager
             CoreAudioDevice prevDevice = controller.DefaultPlaybackDevice;
 
 
-            startWatcher.EventArrived += (s, e) =>
+            Automation.AddAutomationEventHandler(
+        eventId: WindowPattern.WindowOpenedEvent,
+        element: AutomationElement.RootElement,
+        scope: TreeScope.Children,
+        eventHandler: (s, e) =>
+        {
+            bool isBPRunning = OnWindowOpened(s, e);
+            if (isBPRunning && audioDeviceList.InvokeRequired)
             {
-                Console.WriteLine($"Notepad started! PID: {e.NewEvent["ProcessID"]}");
-                if (audioDeviceList.InvokeRequired)
+                Console.WriteLine("Steam Big Picture Mode started!");
+                audioDeviceList.Invoke((MethodInvoker)delegate
                 {
-                    audioDeviceList.Invoke((MethodInvoker)delegate
+                    if (audioDeviceList.SelectedItem is CoreAudioDevice selectedDevice)
                     {
-                        if (audioDeviceList.SelectedItem is CoreAudioDevice selectedDevice)
-                        {
-                            prevDevice = controller.DefaultPlaybackDevice;
-                            selectedDevice.SetAsDefault();
-                        }
-                    });
-                }
-            };
+                        prevDevice = controller.DefaultPlaybackDevice;
+                        selectedDevice.SetAsDefault();
+                    }
+                });
+            }
+        });
+
 
             stopWatcher.EventArrived += async (s, e) =>
             {
-                prevDevice.SetAsDefault();
-                if (turnOffBT.Checked) { await TurnOffBluetoothAsync(); }
                 Console.WriteLine($"Stopped: {e.NewEvent["ProcessName"]}");
+
+                Process[] steamwebhelperInstances = Process.GetProcessesByName("steamwebhelper");
+                bool isBPRunning = steamwebhelperInstances
+                    .Any(steamwebhelper => steamwebhelper.MainWindowTitle == "Steam Big Picture Mode");
+
+                if (!isBPRunning)
+                {
+                    prevDevice.SetAsDefault();
+                    if (turnOffBT.Checked) { await TurnOffBluetoothAsync(); }
+                    Console.WriteLine($"Stopped: {e.NewEvent["ProcessName"]}");
+                }
             };
 
-            startWatcher.Start();
-            stopWatcher.Start();
+
+            //stopWatcher.Start();
         }
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
