@@ -5,4 +5,6 @@ TO-DO:
 1. Make it a tray app
 2. Switch audio to the previous device on BP close
 3. Turn off Xbox controller through API? (not possible now because no api available)
-4. Refactor the whole thing since C# is not my strong suit
+4. Compile into a single .exe
+5. Save settings in .ini file
+6. Refactor the whole thing since C# is not my strong suit
