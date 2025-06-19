@@ -1,9 +1,7 @@
 ﻿using AudioSwitcher.AudioApi;
 using AudioSwitcher.AudioApi.CoreAudio;
 using System;
-using System.Diagnostics;
 using System.Linq;
-using System.Management;
 using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Windows.Forms;
@@ -13,6 +11,8 @@ namespace BigPictureManager
 {
     public partial class Form1 : Form
     {
+        static private readonly string BPWindowName = "Steam Big Picture Mode";
+        private AutomationElement _targetWindow;
         public async Task<bool> TurnOffBluetoothAsync()
         {
             try
@@ -49,33 +49,24 @@ namespace BigPictureManager
                 return false;
             }
         }
-        private static bool OnWindowOpened(object sender, AutomationEventArgs automationEventArgs)
+        private static bool IsBigPictureWindow(object sender)
         {
             try
             {
                 var element = sender as AutomationElement;
-                if (element != null && element.Current.Name == "Steam Big Picture Mode")
-                {
-                    Console.WriteLine("{0} started!", element.Current.Name);
-                    return true;
-                }
+                if (element != null && element.Current.Name == BPWindowName) return true;
                 return false;
             }
             catch (ElementNotAvailableException)
             {
                 return false;
-
             }
         }
-
 
         public Form1() { InitializeComponent(); }
 
 
-        public ManagementEventWatcher stopWatcher = new ManagementEventWatcher(
-                  new WqlEventQuery("SELECT * FROM Win32_ProcessStopTrace WHERE ProcessName='steamwebhelper.exe'"));
-
-        private void Form1_Load(object sender, EventArgs ev)
+        private void Form1_Load(object se, EventArgs ev)
         {
             var controller = new CoreAudioController();
             var devices = controller.GetPlaybackDevices()
@@ -93,8 +84,8 @@ namespace BigPictureManager
         scope: TreeScope.Children,
         eventHandler: (s, e) =>
         {
-            bool isBPRunning = OnWindowOpened(s, e);
-            if (isBPRunning && audioDeviceList.InvokeRequired)
+            bool isBP = IsBigPictureWindow(s);
+            if (isBP && audioDeviceList.InvokeRequired)
             {
                 Console.WriteLine("Steam Big Picture Mode started!");
                 audioDeviceList.Invoke((MethodInvoker)delegate
@@ -104,36 +95,35 @@ namespace BigPictureManager
                         prevDevice = controller.DefaultPlaybackDevice;
                         selectedDevice.SetAsDefault();
                     }
-                });
+
+                    _targetWindow = s as AutomationElement;
+                    Automation.AddAutomationEventHandler(
+                       eventId: WindowPattern.WindowClosedEvent,
+                       element: _targetWindow,
+                       scope: TreeScope.Element,
+                       eventHandler: OnWindowClosed
+                       );
+                }
+                );
             }
         });
 
-
-            stopWatcher.EventArrived += async (s, e) =>
+            async void OnWindowClosed(object sender, AutomationEventArgs e)
             {
-                Console.WriteLine($"Stopped: {e.NewEvent["ProcessName"]}");
+                Console.WriteLine("Target window closed!");
+                if (audioDeviceList.InvokeRequired) audioDeviceList.Invoke((MethodInvoker)(() => prevDevice.SetAsDefault()));
 
-                Process[] steamwebhelperInstances = Process.GetProcessesByName("steamwebhelper");
-                bool isBPRunning = steamwebhelperInstances
-                    .Any(steamwebhelper => steamwebhelper.MainWindowTitle == "Steam Big Picture Mode");
+                if (turnOffBT.Checked) await TurnOffBluetoothAsync();
 
-                if (!isBPRunning)
-                {
-                    prevDevice.SetAsDefault();
-                    if (turnOffBT.Checked) { await TurnOffBluetoothAsync(); }
-                    Console.WriteLine($"Stopped: {e.NewEvent["ProcessName"]}");
-                }
-            };
-
-
-            //stopWatcher.Start();
+                //Automation.RemoveAutomationEventHandler(
+                //    WindowPattern.WindowClosedEvent,
+                //    sender as AutomationElement,
+                //    OnWindowClosed);
+            }
         }
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            startWatcher?.Stop();
-            stopWatcher?.Stop();
-            startWatcher?.Dispose();
-            stopWatcher?.Dispose();
+            Automation.RemoveAllEventHandlers();
         }
     }
 }
