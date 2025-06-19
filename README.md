@@ -4,7 +4,8 @@ Since there's no xbox controller api available it's impossible to turn it off wh
 TO-DO:
 1. Make it a tray app
 2. Switch audio to the previous device on BP close
-3. Turn off Xbox controller through API? (not possible now because no api available)
-4. Compile into a single .exe
-5. Save settings in .ini file
-6. Refactor the whole thing since C# is not my strong suit
+3. Check if BP opened on the TV
+4. Turn off Xbox controller through API? (not possible now because no api available)
+5. Compile into a single .exe
+6. Save settings in .ini file
+7. Refactor the whole thing since C# is not my strong suit
