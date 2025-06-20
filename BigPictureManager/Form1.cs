@@ -13,6 +13,7 @@ namespace BigPictureManager
     {
         static private readonly string BPWindowName = "Steam Big Picture Mode";
         private AutomationElement _targetWindow;
+        private CoreAudioDevice prevDevice;
         public async Task<bool> TurnOffBluetoothAsync()
         {
             try
@@ -75,7 +76,7 @@ namespace BigPictureManager
 
             audioDeviceList.DataSource = devices;
             audioDeviceList.DisplayMember = "FullName";
-            CoreAudioDevice prevDevice = controller.DefaultPlaybackDevice;
+            prevDevice = controller.DefaultPlaybackDevice;
 
 
             Automation.AddAutomationEventHandler(
