@@ -5,7 +5,7 @@ TO-DO:
 1. Make it a tray app
 2. ~~Switch audio to the selected device on BP start~~
 3. ~~Turn off bluetooth checkbox on BP close~~
-4. Switch audio to the previous device on BP close
+4. ~~Switch audio to the previous device on BP close~~
 5. Check if BP opened on the TV
 6. Turn off Xbox controller through API? (not possible now because no api available)
 7. ~~Compile into a single .exe~~
