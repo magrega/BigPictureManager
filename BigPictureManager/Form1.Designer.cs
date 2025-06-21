@@ -28,8 +28,11 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             this.audioDeviceList = new System.Windows.Forms.ComboBox();
             this.turnOffBT = new System.Windows.Forms.CheckBox();
+            this.notifyIcon1 = new System.Windows.Forms.NotifyIcon(this.components);
             this.SuspendLayout();
             // 
             // audioDeviceList
@@ -51,6 +54,12 @@
             this.turnOffBT.Text = "Turn off BT on app exit";
             this.turnOffBT.UseVisualStyleBackColor = true;
             // 
+            // notifyIcon1
+            // 
+            this.notifyIcon1.Icon = ((System.Drawing.Icon)(resources.GetObject("notifyIcon1.Icon")));
+            this.notifyIcon1.Text = "BP Audio Manager";
+            this.notifyIcon1.Visible = true;
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -70,6 +79,7 @@
         #endregion
         private System.Windows.Forms.ComboBox audioDeviceList;
         private System.Windows.Forms.CheckBox turnOffBT;
+        private System.Windows.Forms.NotifyIcon notifyIcon1;
     }
 }
 
