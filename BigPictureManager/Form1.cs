@@ -16,6 +16,11 @@ namespace BigPictureManager
         private AutomationElement _targetWindow;
         private CoreAudioDevice prevDevice;
 
+        protected void Exit_Click(Object sender, System.EventArgs e)
+        {
+            Close();
+        }
+
         public async Task<bool> TurnOffBluetoothAsync()
         {
             try
@@ -139,11 +144,6 @@ namespace BigPictureManager
             }
         }
 
-        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            Automation.RemoveAllEventHandlers();
-        }
-
         private void Form1_Resize(object sender, EventArgs e)
         {
             if (this.WindowState == FormWindowState.Minimized)
@@ -153,11 +153,16 @@ namespace BigPictureManager
             }
         }
 
-        private void notifyIcon1_MouseDoubleClick(object sender, MouseEventArgs e)
+        private void NotifyIcon1_MouseDoubleClick(object sender, MouseEventArgs e)
         {
             Show();
             this.WindowState = FormWindowState.Normal;
             notifyIcon1.Visible = false;
+        }
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            Automation.RemoveAllEventHandlers();
         }
     }
 }
