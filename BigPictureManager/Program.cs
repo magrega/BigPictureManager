@@ -1,8 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows.Automation;
 using System.Windows.Forms;
+using AudioSwitcher.AudioApi;
+using AudioSwitcher.AudioApi.CoreAudio;
+using BigPictureManager.Properties;
+using Windows.Devices.Radios;
 
 namespace BigPictureManager
 {
@@ -16,7 +21,318 @@ namespace BigPictureManager
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new Form1());
+            Application.Run(new BigPictureTray());
+        }
+    }
+
+    public class BigPictureTray : ApplicationContext
+    {
+        private static readonly string BPWindowName = "Steam Big Picture Mode";
+        private static readonly string AppName = "Big Picture Audio Switcher";
+        private AutomationElement targetWindow;
+        private CoreAudioDevice prevDevice;
+        private CoreAudioDevice selectedDevice;
+        private CoreAudioController controller;
+        private readonly NotifyIcon trayIcon;
+        private ToolStripMenuItem AudioMenuItem;
+        private ToolStripMenuItem BTMenuItem;
+
+        public async Task<bool> TurnOffBluetoothAsync()
+        {
+            try
+            {
+                var access = await Radio.RequestAccessAsync();
+                if (access != RadioAccessStatus.Allowed)
+                {
+                    Console.WriteLine("Permission denied to control radios");
+                    return false;
+                }
+
+                var radios = await Radio.GetRadiosAsync();
+                var bluetoothRadio = radios.FirstOrDefault(radio =>
+                    radio.Kind == RadioKind.Bluetooth
+                );
+
+                if (bluetoothRadio == null)
+                {
+                    Console.WriteLine("Bluetooth radio not found");
+                    return false;
+                }
+
+                if (bluetoothRadio.State != RadioState.Off)
+                {
+                    await bluetoothRadio.SetStateAsync(RadioState.Off);
+                    Console.WriteLine("Bluetooth turned off successfully");
+                    return true;
+                }
+
+                Console.WriteLine("Bluetooth is already off");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static bool IsBigPictureWindow(object sender)
+        {
+            try
+            {
+                var element = sender as AutomationElement;
+                if (element != null && element.Current.Name == BPWindowName)
+                    return true;
+                return false;
+            }
+            catch (ElementNotAvailableException)
+            {
+                return false;
+            }
+        }
+
+        async void OnWindowClosed(object sender, AutomationEventArgs e)
+        {
+            Console.WriteLine("Target window closed!");
+            prevDevice.SetAsDefault();
+
+            if (BTMenuItem.Checked)
+                await TurnOffBluetoothAsync();
+
+            //Automation.RemoveAutomationEventHandler(
+            //    WindowPattern.WindowClosedEvent,
+            //    sender as AutomationElement,
+            //    OnWindowClosed);
+        }
+
+        public BigPictureTray()
+        {
+            // Initialize Tray Icon
+            trayIcon = new NotifyIcon()
+            {
+                Icon = Resources.TrayIcon,
+                Visible = true,
+                Text = AppName,
+                ContextMenuStrip = CreateMainMenu(),
+            };
+            InitializeAsync();
+            ListenForBP();
+        }
+
+        private void UpdateUI(Action action)
+        {
+            if (trayIcon.ContextMenuStrip.InvokeRequired)
+            {
+                trayIcon.ContextMenuStrip.Invoke(new MethodInvoker(action));
+            }
+            else
+            {
+                action();
+            }
+        }
+
+        private async void InitializeAsync()
+        {
+            // Create menu first (without devices)
+            var tempMenu = new ContextMenuStrip();
+            tempMenu.Items.Add("Loading audio devices...");
+            AudioMenuItem.DropDown = tempMenu;
+
+            // Initialize audio devices
+            var audioMenu = await Task.Run(() => CreateAudioMenu());
+            await Task.Run(() =>
+            {
+                UpdateUI(() =>
+                {
+                    tempMenu.Dispose();
+                });
+            });
+
+            AudioMenuItem.DropDown = audioMenu;
+            // Now safe to start listening
+        }
+
+        private ContextMenuStrip CreateMainMenu()
+        {
+            var menu = new ContextMenuStrip();
+
+            AudioMenuItem = new ToolStripMenuItem("Choose Audio Device");
+            var SeparatorMenuItem = new ToolStripSeparator();
+            BTMenuItem = new ToolStripMenuItem("Turn off Bluetooth on BP close")
+            {
+                CheckOnClick = true,
+            };
+
+            var StartMenuItem = new ToolStripMenuItem("Launch on system start")
+            {
+                CheckOnClick = true,
+                Checked = IsStartupEnabled(),
+            };
+            StartMenuItem.Click += (s, e) =>
+            {
+                SetStartup(StartMenuItem.Checked);
+            };
+
+            var ExitMenuItem = new ToolStripMenuItem("Exit");
+            ExitMenuItem.Click += new EventHandler(Exit);
+
+            menu.Items.AddRange(
+                new ToolStripItem[]
+                {
+                    AudioMenuItem,
+                    SeparatorMenuItem,
+                    BTMenuItem,
+                    StartMenuItem,
+                    ExitMenuItem,
+                }
+            );
+            return menu;
+        }
+
+        private ContextMenuStrip CreateAudioMenu()
+        {
+            var menu = new ContextMenuStrip();
+
+            controller = new CoreAudioController();
+            prevDevice = controller.DefaultPlaybackDevice;
+
+            var deviceItems = controller
+                .GetPlaybackDevices()
+                .Where(d => d.State == DeviceState.Active)
+                .Select(
+                    (device, index) =>
+                    {
+                        var item = new ToolStripMenuItem(device.FullName)
+                        {
+                            Tag = device, // Store the device object for later reference
+                            Checked = device.IsDefaultDevice, // Show checkmark for current default
+                        };
+
+                        item.Click += (sender, e) =>
+                        {
+                            selectedDevice = (CoreAudioDevice)((ToolStripMenuItem)sender).Tag;
+
+                            // Update checkmarks
+                            foreach (
+                                ToolStripMenuItem otherItem in menu.Items.OfType<ToolStripMenuItem>()
+                            )
+                            {
+                                otherItem.Checked =
+                                    (otherItem.Tag as CoreAudioDevice)?.Id == selectedDevice.Id;
+                            }
+                        };
+
+                        return item;
+                    }
+                )
+                .Cast<ToolStripItem>()
+                .ToArray();
+
+            UpdateUI(() =>
+            {
+                menu.Items.AddRange(deviceItems);
+            });
+
+            return menu;
+        }
+
+        private void ListenForBP()
+        {
+            Automation.AddAutomationEventHandler(
+                eventId: WindowPattern.WindowOpenedEvent,
+                element: AutomationElement.RootElement,
+                scope: TreeScope.Children,
+                eventHandler: (s, e) =>
+                {
+                    bool isBP = IsBigPictureWindow(s);
+                    if (isBP)
+                    {
+                        Console.WriteLine("Steam Big Picture Mode started!");
+                        prevDevice = controller.DefaultPlaybackDevice;
+                        selectedDevice.SetAsDefault();
+
+                        targetWindow = s as AutomationElement;
+                        Automation.AddAutomationEventHandler(
+                            eventId: WindowPattern.WindowClosedEvent,
+                            element: targetWindow,
+                            scope: TreeScope.Element,
+                            eventHandler: OnWindowClosed
+                        );
+                    }
+                }
+            );
+        }
+
+        private bool IsStartupEnabled()
+        {
+            string shortcutPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Startup),
+                $"{Path.GetFileNameWithoutExtension(Application.ExecutablePath)}.lnk"
+            );
+
+            if (!File.Exists(shortcutPath))
+                return false;
+
+            // Verify the shortcut actually points to our app
+            var shell = new IWshRuntimeLibrary.WshShell();
+            var shortcut = (IWshRuntimeLibrary.IWshShortcut)shell.CreateShortcut(shortcutPath);
+            return string.Equals(
+                shortcut.TargetPath,
+                Application.ExecutablePath,
+                StringComparison.OrdinalIgnoreCase
+            );
+        }
+
+        private void SetStartup(bool enable)
+        {
+            try
+            {
+                // Get the path to the executable
+                string appPath = Application.ExecutablePath;
+
+                // Get the startup folder path
+                string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+
+                // Create a shortcut path
+                string shortcutPath = Path.Combine(
+                    startupPath,
+                    Path.GetFileNameWithoutExtension(appPath) + ".lnk"
+                );
+
+                if (enable)
+                {
+                    // Create shortcut
+                    var shell = new IWshRuntimeLibrary.WshShell();
+                    IWshRuntimeLibrary.IWshShortcut shortcut = (IWshRuntimeLibrary.IWshShortcut)
+                        shell.CreateShortcut(shortcutPath);
+
+                    shortcut.TargetPath = appPath;
+                    shortcut.WorkingDirectory = Path.GetDirectoryName(appPath);
+                    shortcut.Description = AppName;
+                    shortcut.IconLocation = appPath + ",0"; // Use first icon from EXE
+                    shortcut.Save();
+                }
+                else
+                {
+                    // Remove shortcut
+                    if (File.Exists(shortcutPath))
+                    {
+                        File.Delete(shortcutPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error setting startup: {ex.Message}");
+            }
+        }
+
+        void Exit(object sender, EventArgs e)
+        {
+            Automation.RemoveAllEventHandlers();
+            trayIcon.Visible = false;
+            trayIcon.Dispose();
+            Application.Exit();
         }
     }
 }
