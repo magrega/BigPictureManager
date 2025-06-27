@@ -1,12 +1,12 @@
-﻿using System;
+﻿using AudioSwitcher.AudioApi;
+using AudioSwitcher.AudioApi.CoreAudio;
+using BigPictureManager.Properties;
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Windows.Forms;
-using AudioSwitcher.AudioApi;
-using AudioSwitcher.AudioApi.CoreAudio;
-using BigPictureManager.Properties;
 using Windows.Devices.Radios;
 
 namespace BigPictureManager
@@ -119,6 +119,14 @@ namespace BigPictureManager
             ListenForBP();
         }
 
+        private void UpdateDeviceCheckmarks(CoreAudioDevice selectedDevice, ContextMenuStrip menu)
+        {
+            foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
+            {
+                item.Checked = (item.Tag as CoreAudioDevice)?.Id == selectedDevice?.Id;
+            }
+        }
+
         private void UpdateUI(Action action)
         {
             if (trayIcon.ContextMenuStrip.InvokeRequired)
@@ -198,40 +206,42 @@ namespace BigPictureManager
 
             var deviceItems = controller
                 .GetPlaybackDevices()
-                .Where(d => d.State == DeviceState.Active)
-                .Select(
-                    (device, index) =>
+                .Where(d => d.State == DeviceState.Active);
+
+            var audioListItems = deviceItems.Select(
+                (device, index) =>
+                {
+                    ToolStripMenuItem item = new ToolStripMenuItem(device.FullName)
                     {
-                        var item = new ToolStripMenuItem(device.FullName)
-                        {
-                            Tag = device, // Store the device object for later reference
-                            Checked = device.IsDefaultDevice, // Show checkmark for current default
-                        };
+                        Tag = device, // Store the device object for later reference
+                        //Checked = device.IsDefaultDevice
+                    };
 
-                        item.Click += (sender, e) =>
-                        {
-                            selectedDevice = (CoreAudioDevice)((ToolStripMenuItem)sender).Tag;
+                    item.Click += (sender, e) =>
+                    {
+                        selectedDevice = (CoreAudioDevice)((ToolStripMenuItem)sender).Tag;
 
-                            // Update checkmarks
-                            foreach (
-                                ToolStripMenuItem otherItem in menu.Items.OfType<ToolStripMenuItem>()
-                            )
-                            {
-                                otherItem.Checked =
-                                    (otherItem.Tag as CoreAudioDevice)?.Id == selectedDevice.Id;
-                            }
-                        };
+                        UpdateDeviceCheckmarks(selectedDevice, menu);
+                    };
 
-                        return item;
-                    }
-                )
-                .Cast<ToolStripItem>()
-                .ToArray();
+                    return item;
+                }
+            );
 
-            UpdateUI(() =>
+            menu.Items.AddRange(audioListItems.Cast<ToolStripItem>().ToArray());
+
+            var tvDevice = audioListItems.FirstOrDefault(d => d.Text.Contains("TV"));
+
+            if (tvDevice != null)
             {
-                menu.Items.AddRange(deviceItems);
-            });
+                selectedDevice = (CoreAudioDevice)tvDevice.Tag;
+                UpdateDeviceCheckmarks(selectedDevice, menu);
+            }
+            else
+            {
+                selectedDevice = (CoreAudioDevice)menu.Items[0].Tag;
+                UpdateDeviceCheckmarks(selectedDevice, menu);
+            }
 
             return menu;
         }
