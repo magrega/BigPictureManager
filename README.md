@@ -8,8 +8,8 @@ TO-DO:
 4. ~~Turn off bluetooth checkbox on BP close~~
 5. ~~Switch audio to the previous device on BP close~~
 6. ~~Compile into a single .exe~~
-7. Check for a TV audio device to preset
-8. Save settings in .ini file
+7. ~~Check for a TV audio device to preset~~
+8. Save app state
 9. Change audio only when BP is on TV
 10. Refactor the whole thing since C# is not my strong suit
 11. Turn off Xbox controller through API? (not possible now, no api available)
