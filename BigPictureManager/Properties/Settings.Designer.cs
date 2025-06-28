@@ -25,13 +25,13 @@ namespace BigPictureManager.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("null")]
-        public string LastAudioDevice {
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string LastAudioDeviceId {
             get {
-                return ((string)(this["LastAudioDevice"]));
+                return ((string)(this["LastAudioDeviceId"]));
             }
             set {
-                this["LastAudioDevice"] = value;
+                this["LastAudioDeviceId"] = value;
             }
         }
     }

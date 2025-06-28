@@ -211,15 +211,15 @@ namespace BigPictureManager
             var audioListItems = deviceItems.Select(
                 (device, index) =>
                 {
-                    ToolStripMenuItem item = new ToolStripMenuItem(device.FullName)
-                    {
-                        Tag = device, // Store the device object for later reference
-                        //Checked = device.IsDefaultDevice
-                    };
+                    ToolStripMenuItem item = new ToolStripMenuItem(device.FullName);
+                    item.Tag = device;
 
                     item.Click += (sender, e) =>
                     {
                         selectedDevice = (CoreAudioDevice)((ToolStripMenuItem)sender).Tag;
+                        Properties.Settings.Default.LastAudioDeviceId =
+                            selectedDevice.Id.ToString();
+                        Properties.Settings.Default.Save();
 
                         UpdateDeviceCheckmarks(selectedDevice, menu);
                     };
@@ -230,20 +230,38 @@ namespace BigPictureManager
 
             menu.Items.AddRange(audioListItems.Cast<ToolStripItem>().ToArray());
 
-            var tvDevice = audioListItems.FirstOrDefault(d => d.Text.Contains("TV"));
-
-            if (tvDevice != null)
+            if (!string.IsNullOrEmpty(Properties.Settings.Default.LastAudioDeviceId))
             {
-                selectedDevice = (CoreAudioDevice)tvDevice.Tag;
-                UpdateDeviceCheckmarks(selectedDevice, menu);
-            }
-            else
-            {
-                var defaultAudio = audioListItems.FirstOrDefault(d =>
-                    (d.Tag as CoreAudioDevice).IsDefaultDevice
+                var lastDeviceId = Guid.Parse(Properties.Settings.Default.LastAudioDeviceId);
+                var lastDeviceItem = audioListItems.FirstOrDefault(i =>
+                    ((CoreAudioDevice)i.Tag).Id == lastDeviceId
                 );
-                selectedDevice = (CoreAudioDevice)defaultAudio.Tag;
-                UpdateDeviceCheckmarks(selectedDevice, menu);
+
+                if (lastDeviceItem != null)
+                {
+                    selectedDevice = (CoreAudioDevice)lastDeviceItem.Tag;
+                    UpdateDeviceCheckmarks(selectedDevice, menu);
+                    return menu;
+                }
+
+                if (lastDeviceItem == null)
+                {
+                    var tvDevice = audioListItems.FirstOrDefault(d => d.Text.Contains("TV"));
+
+                    if (tvDevice != null)
+                    {
+                        selectedDevice = (CoreAudioDevice)tvDevice.Tag;
+                        UpdateDeviceCheckmarks(selectedDevice, menu);
+                    }
+                    else
+                    {
+                        var defaultAudio = audioListItems.FirstOrDefault(d =>
+                            (d.Tag as CoreAudioDevice).IsDefaultDevice
+                        );
+                        selectedDevice = (CoreAudioDevice)defaultAudio.Tag;
+                        UpdateDeviceCheckmarks(selectedDevice, menu);
+                    }
+                }
             }
 
             return menu;
