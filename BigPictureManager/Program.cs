@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -139,6 +140,29 @@ namespace BigPictureManager
             }
         }
 
+        private void SetDefaultAudio(
+            ContextMenuStrip menu,
+            IEnumerable<ToolStripMenuItem> audioListItems
+        )
+        {
+            var tvDevice = audioListItems.FirstOrDefault(d => d.Text.Contains("TV"));
+
+            if (tvDevice != null)
+            {
+                selectedDevice = (CoreAudioDevice)tvDevice.Tag;
+                UpdateDeviceCheckmarks(selectedDevice, menu);
+            }
+            else
+            {
+                var defaultAudio = audioListItems.FirstOrDefault(d =>
+                    (d.Tag as CoreAudioDevice).IsDefaultDevice
+                );
+                selectedDevice = (CoreAudioDevice)defaultAudio.Tag;
+                UpdateDeviceCheckmarks(selectedDevice, menu);
+            }
+            ;
+        }
+
         private async void InitializeAsync()
         {
             // Create menu first (without devices)
@@ -211,8 +235,10 @@ namespace BigPictureManager
             var audioListItems = deviceItems.Select(
                 (device, index) =>
                 {
-                    ToolStripMenuItem item = new ToolStripMenuItem(device.FullName);
-                    item.Tag = device;
+                    ToolStripMenuItem item = new ToolStripMenuItem(device.FullName)
+                    {
+                        Tag = device,
+                    };
 
                     item.Click += (sender, e) =>
                     {
@@ -241,29 +267,17 @@ namespace BigPictureManager
                 {
                     selectedDevice = (CoreAudioDevice)lastDeviceItem.Tag;
                     UpdateDeviceCheckmarks(selectedDevice, menu);
-                    return menu;
                 }
 
                 if (lastDeviceItem == null)
                 {
-                    var tvDevice = audioListItems.FirstOrDefault(d => d.Text.Contains("TV"));
-
-                    if (tvDevice != null)
-                    {
-                        selectedDevice = (CoreAudioDevice)tvDevice.Tag;
-                        UpdateDeviceCheckmarks(selectedDevice, menu);
-                    }
-                    else
-                    {
-                        var defaultAudio = audioListItems.FirstOrDefault(d =>
-                            (d.Tag as CoreAudioDevice).IsDefaultDevice
-                        );
-                        selectedDevice = (CoreAudioDevice)defaultAudio.Tag;
-                        UpdateDeviceCheckmarks(selectedDevice, menu);
-                    }
+                    SetDefaultAudio(menu, audioListItems);
                 }
             }
-
+            else
+            {
+                SetDefaultAudio(menu, audioListItems);
+            }
             return menu;
         }
 
