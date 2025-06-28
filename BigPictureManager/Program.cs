@@ -1,12 +1,12 @@
-﻿using AudioSwitcher.AudioApi;
-using AudioSwitcher.AudioApi.CoreAudio;
-using BigPictureManager.Properties;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Windows.Forms;
+using AudioSwitcher.AudioApi;
+using AudioSwitcher.AudioApi.CoreAudio;
+using BigPictureManager.Properties;
 using Windows.Devices.Radios;
 
 namespace BigPictureManager
@@ -239,7 +239,10 @@ namespace BigPictureManager
             }
             else
             {
-                selectedDevice = (CoreAudioDevice)menu.Items[0].Tag;
+                var defaultAudio = audioListItems.FirstOrDefault(d =>
+                    (d.Tag as CoreAudioDevice).IsDefaultDevice
+                );
+                selectedDevice = (CoreAudioDevice)defaultAudio.Tag;
                 UpdateDeviceCheckmarks(selectedDevice, menu);
             }
 
