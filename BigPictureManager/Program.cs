@@ -37,6 +37,7 @@ namespace BigPictureManager
         private readonly NotifyIcon trayIcon;
         private ToolStripMenuItem AudioMenuItem;
         private ToolStripMenuItem BTMenuItem;
+        private bool isTurnOffBT = Properties.Settings.Default.isTurnOffBT;
 
         public async Task<bool> TurnOffBluetoothAsync()
         {
@@ -97,7 +98,7 @@ namespace BigPictureManager
             Console.WriteLine("Target window closed!");
             prevDevice.SetAsDefault();
 
-            if (BTMenuItem.Checked)
+            if (isTurnOffBT)
                 await TurnOffBluetoothAsync();
 
             //Automation.RemoveAutomationEventHandler(
@@ -193,6 +194,20 @@ namespace BigPictureManager
             BTMenuItem = new ToolStripMenuItem("Turn off Bluetooth on BP close")
             {
                 CheckOnClick = true,
+                Checked = isTurnOffBT,
+            };
+            BTMenuItem.Click += (s, e) =>
+            {
+                Console.WriteLine(BTMenuItem.Checked);
+                if (BTMenuItem.Checked)
+                {
+                    Properties.Settings.Default.isTurnOffBT = true;
+                }
+                else
+                {
+                    Properties.Settings.Default.isTurnOffBT = false;
+                }
+                Properties.Settings.Default.Save();
             };
 
             var StartMenuItem = new ToolStripMenuItem("Launch on system start")

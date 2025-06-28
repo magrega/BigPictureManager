@@ -34,5 +34,17 @@ namespace BigPictureManager.Properties {
                 this["LastAudioDeviceId"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool isTurnOffBT {
+            get {
+                return ((bool)(this["isTurnOffBT"]));
+            }
+            set {
+                this["isTurnOffBT"] = value;
+            }
+        }
     }
 }
