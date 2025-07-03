@@ -38,6 +38,7 @@ namespace BigPictureManager
         private ToolStripMenuItem AudioMenuItem;
         private ToolStripMenuItem BTMenuItem;
         private bool isTurnOffBT = Properties.Settings.Default.isTurnOffBT;
+        private bool isAutoStart = Properties.Settings.Default.isAutoStart;
 
         public async Task<bool> TurnOffBluetoothAsync()
         {
@@ -198,7 +199,6 @@ namespace BigPictureManager
             };
             BTMenuItem.Click += (s, e) =>
             {
-                Console.WriteLine(BTMenuItem.Checked);
                 if (BTMenuItem.Checked)
                 {
                     Properties.Settings.Default.isTurnOffBT = true;
@@ -213,10 +213,19 @@ namespace BigPictureManager
             var StartMenuItem = new ToolStripMenuItem("Launch on system start")
             {
                 CheckOnClick = true,
-                Checked = IsStartupEnabled(),
+                Checked = isAutoStart,
             };
             StartMenuItem.Click += (s, e) =>
             {
+                if (StartMenuItem.Checked)
+                {
+                    Properties.Settings.Default.isAutoStart = true;
+                }
+                else
+                {
+                    Properties.Settings.Default.isAutoStart = false;
+                }
+                Properties.Settings.Default.Save();
                 SetStartup(StartMenuItem.Checked);
             };
 
@@ -323,37 +332,12 @@ namespace BigPictureManager
             );
         }
 
-        private bool IsStartupEnabled()
-        {
-            string shortcutPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Startup),
-                $"{Path.GetFileNameWithoutExtension(Application.ExecutablePath)}.lnk"
-            );
-
-            if (!File.Exists(shortcutPath))
-                return false;
-
-            // Verify the shortcut actually points to our app
-            var shell = new IWshRuntimeLibrary.WshShell();
-            var shortcut = (IWshRuntimeLibrary.IWshShortcut)shell.CreateShortcut(shortcutPath);
-            return string.Equals(
-                shortcut.TargetPath,
-                Application.ExecutablePath,
-                StringComparison.OrdinalIgnoreCase
-            );
-        }
-
         private void SetStartup(bool enable)
         {
             try
             {
-                // Get the path to the executable
                 string appPath = Application.ExecutablePath;
-
-                // Get the startup folder path
                 string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
-
-                // Create a shortcut path
                 string shortcutPath = Path.Combine(
                     startupPath,
                     Path.GetFileNameWithoutExtension(appPath) + ".lnk"
@@ -361,7 +345,6 @@ namespace BigPictureManager
 
                 if (enable)
                 {
-                    // Create shortcut
                     var shell = new IWshRuntimeLibrary.WshShell();
                     IWshRuntimeLibrary.IWshShortcut shortcut = (IWshRuntimeLibrary.IWshShortcut)
                         shell.CreateShortcut(shortcutPath);
@@ -369,16 +352,12 @@ namespace BigPictureManager
                     shortcut.TargetPath = appPath;
                     shortcut.WorkingDirectory = Path.GetDirectoryName(appPath);
                     shortcut.Description = AppName;
-                    shortcut.IconLocation = appPath + ",0"; // Use first icon from EXE
+                    shortcut.IconLocation = appPath + ",0";
                     shortcut.Save();
                 }
                 else
                 {
-                    // Remove shortcut
-                    if (File.Exists(shortcutPath))
-                    {
-                        File.Delete(shortcutPath);
-                    }
+                    if (File.Exists(shortcutPath)) File.Delete(shortcutPath);
                 }
             }
             catch (Exception ex)
