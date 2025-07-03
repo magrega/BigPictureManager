@@ -1,13 +1,13 @@
-﻿using System;
+﻿using AudioSwitcher.AudioApi;
+using AudioSwitcher.AudioApi.CoreAudio;
+using BigPictureManager.Properties;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Windows.Forms;
-using AudioSwitcher.AudioApi;
-using AudioSwitcher.AudioApi.CoreAudio;
-using BigPictureManager.Properties;
 using Windows.Devices.Radios;
 
 namespace BigPictureManager
@@ -37,143 +37,18 @@ namespace BigPictureManager
         private readonly NotifyIcon trayIcon;
         private ToolStripMenuItem AudioMenuItem;
         private ToolStripMenuItem BTMenuItem;
-        private bool isTurnOffBT = Properties.Settings.Default.isTurnOffBT;
-        private bool isAutoStart = Properties.Settings.Default.isAutoStart;
-
-        public async Task<bool> TurnOffBluetoothAsync()
-        {
-            try
-            {
-                var access = await Radio.RequestAccessAsync();
-                if (access != RadioAccessStatus.Allowed)
-                {
-                    Console.WriteLine("Permission denied to control radios");
-                    return false;
-                }
-
-                var radios = await Radio.GetRadiosAsync();
-                var bluetoothRadio = radios.FirstOrDefault(radio =>
-                    radio.Kind == RadioKind.Bluetooth
-                );
-
-                if (bluetoothRadio == null)
-                {
-                    Console.WriteLine("Bluetooth radio not found");
-                    return false;
-                }
-
-                if (bluetoothRadio.State != RadioState.Off)
-                {
-                    await bluetoothRadio.SetStateAsync(RadioState.Off);
-                    Console.WriteLine("Bluetooth turned off successfully");
-                    return true;
-                }
-
-                Console.WriteLine("Bluetooth is already off");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
-                return false;
-            }
-        }
-
-        private static bool IsBigPictureWindow(object sender)
-        {
-            try
-            {
-                var element = sender as AutomationElement;
-                if (element != null && element.Current.Name == BPWindowName)
-                    return true;
-                return false;
-            }
-            catch (ElementNotAvailableException)
-            {
-                return false;
-            }
-        }
-
-        async void OnWindowClosed(object sender, AutomationEventArgs e)
-        {
-            Console.WriteLine("Target window closed!");
-            prevDevice.SetAsDefault();
-
-            if (isTurnOffBT)
-                await TurnOffBluetoothAsync();
-
-            //Automation.RemoveAutomationEventHandler(
-            //    WindowPattern.WindowClosedEvent,
-            //    sender as AutomationElement,
-            //    OnWindowClosed);
-        }
-
-        public BigPictureTray()
-        {
-            // Initialize Tray Icon
-            trayIcon = new NotifyIcon()
-            {
-                Icon = Resources.TrayIcon,
-                Visible = true,
-                Text = AppName,
-                ContextMenuStrip = CreateMainMenu(),
-            };
-            InitializeAsync();
-            ListenForBP();
-        }
-
-        private void UpdateDeviceCheckmarks(CoreAudioDevice selectedDevice, ContextMenuStrip menu)
-        {
-            foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
-            {
-                item.Checked = (item.Tag as CoreAudioDevice)?.Id == selectedDevice?.Id;
-            }
-        }
-
-        private void UpdateUI(Action action)
-        {
-            if (trayIcon.ContextMenuStrip.InvokeRequired)
-            {
-                trayIcon.ContextMenuStrip.Invoke(new MethodInvoker(action));
-            }
-            else
-            {
-                action();
-            }
-        }
-
-        private void SetDefaultAudio(
-            ContextMenuStrip menu,
-            IEnumerable<ToolStripMenuItem> audioListItems
-        )
-        {
-            var tvDevice = audioListItems.FirstOrDefault(d => d.Text.Contains("TV"));
-
-            if (tvDevice != null)
-            {
-                selectedDevice = (CoreAudioDevice)tvDevice.Tag;
-                UpdateDeviceCheckmarks(selectedDevice, menu);
-            }
-            else
-            {
-                var defaultAudio = audioListItems.FirstOrDefault(d =>
-                    (d.Tag as CoreAudioDevice).IsDefaultDevice
-                );
-                selectedDevice = (CoreAudioDevice)defaultAudio.Tag;
-                UpdateDeviceCheckmarks(selectedDevice, menu);
-            }
-            ;
-        }
+        private Radio BluetoothDevice = null;
+        private readonly bool isTurnOffBT = Properties.Settings.Default.isTurnOffBT;
+        private readonly bool isAutoStart = Properties.Settings.Default.isAutoStart;
 
         private async void InitializeAsync()
         {
-            // Create menu first (without devices)
             var tempMenu = new ContextMenuStrip();
             tempMenu.Items.Add("Loading audio devices...");
             AudioMenuItem.DropDown = tempMenu;
-
-            // Initialize audio devices
             var audioMenu = await Task.Run(() => CreateAudioMenu());
+            BluetoothDevice = await RequestBluetoothDevice();
+
             await Task.Run(() =>
             {
                 UpdateUI(() =>
@@ -183,7 +58,19 @@ namespace BigPictureManager
             });
 
             AudioMenuItem.DropDown = audioMenu;
-            // Now safe to start listening
+        }
+
+        public BigPictureTray()
+        {
+            trayIcon = new NotifyIcon()
+            {
+                Icon = Resources.TrayIcon,
+                Visible = true,
+                Text = AppName,
+                ContextMenuStrip = CreateMainMenu(),
+            };
+            InitializeAsync();
+            ListenForBP();
         }
 
         private ContextMenuStrip CreateMainMenu()
@@ -196,6 +83,7 @@ namespace BigPictureManager
             {
                 CheckOnClick = true,
                 Checked = isTurnOffBT,
+                Enabled = BluetoothDevice != null,
             };
             BTMenuItem.Click += (s, e) =>
             {
@@ -305,6 +193,84 @@ namespace BigPictureManager
             return menu;
         }
 
+        private void SetStartup(bool enable)
+        {
+            try
+            {
+                string appPath = Application.ExecutablePath;
+                string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+                string shortcutPath = Path.Combine(
+                    startupPath,
+                    Path.GetFileNameWithoutExtension(appPath) + ".lnk"
+                );
+
+                if (enable)
+                {
+                    var shell = new IWshRuntimeLibrary.WshShell();
+                    IWshRuntimeLibrary.IWshShortcut shortcut = (IWshRuntimeLibrary.IWshShortcut)
+                        shell.CreateShortcut(shortcutPath);
+
+                    shortcut.TargetPath = appPath;
+                    shortcut.WorkingDirectory = Path.GetDirectoryName(appPath);
+                    shortcut.Description = AppName;
+                    shortcut.IconLocation = appPath + ",0";
+                    shortcut.Save();
+                }
+                else
+                {
+                    if (File.Exists(shortcutPath))
+                        File.Delete(shortcutPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error setting startup: {ex.Message}");
+            }
+        }
+
+        private async Task<Radio> RequestBluetoothDevice()
+        {
+            var access = await Radio.RequestAccessAsync();
+            if (access != RadioAccessStatus.Allowed)
+            {
+                Console.WriteLine("Permission denied to control radios");
+                return null;
+            }
+
+            var radios = await Radio.GetRadiosAsync();
+            var bluetoothRadio = radios.FirstOrDefault(radio => radio.Kind == RadioKind.Bluetooth);
+            return bluetoothRadio;
+        }
+
+        public async Task<bool> TurnOffBluetoothAsync()
+        {
+            try
+            {
+                var bluetoothRadio = await RequestBluetoothDevice();
+
+                if (bluetoothRadio == null)
+                {
+                    Console.WriteLine("Bluetooth radio not found");
+                    return false;
+                }
+
+                if (bluetoothRadio.State != RadioState.Off)
+                {
+                    await bluetoothRadio.SetStateAsync(RadioState.Off);
+                    Console.WriteLine("Bluetooth turned off successfully");
+                    return true;
+                }
+
+                Console.WriteLine("Bluetooth is already off");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                return false;
+            }
+        }
+
         private void ListenForBP()
         {
             Automation.AddAutomationEventHandler(
@@ -332,38 +298,76 @@ namespace BigPictureManager
             );
         }
 
-        private void SetStartup(bool enable)
+        private static bool IsBigPictureWindow(object sender)
         {
             try
             {
-                string appPath = Application.ExecutablePath;
-                string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
-                string shortcutPath = Path.Combine(
-                    startupPath,
-                    Path.GetFileNameWithoutExtension(appPath) + ".lnk"
-                );
-
-                if (enable)
-                {
-                    var shell = new IWshRuntimeLibrary.WshShell();
-                    IWshRuntimeLibrary.IWshShortcut shortcut = (IWshRuntimeLibrary.IWshShortcut)
-                        shell.CreateShortcut(shortcutPath);
-
-                    shortcut.TargetPath = appPath;
-                    shortcut.WorkingDirectory = Path.GetDirectoryName(appPath);
-                    shortcut.Description = AppName;
-                    shortcut.IconLocation = appPath + ",0";
-                    shortcut.Save();
-                }
-                else
-                {
-                    if (File.Exists(shortcutPath)) File.Delete(shortcutPath);
-                }
+                var element = sender as AutomationElement;
+                if (element != null && element.Current.Name == BPWindowName)
+                    return true;
+                return false;
             }
-            catch (Exception ex)
+            catch (ElementNotAvailableException)
             {
-                MessageBox.Show($"Error setting startup: {ex.Message}");
+                return false;
             }
+        }
+
+        async void OnWindowClosed(object sender, AutomationEventArgs e)
+        {
+            Console.WriteLine("Target window closed!");
+            prevDevice.SetAsDefault();
+
+            if (isTurnOffBT)
+                await TurnOffBluetoothAsync();
+
+            //Automation.RemoveAutomationEventHandler(
+            //    WindowPattern.WindowClosedEvent,
+            //    sender as AutomationElement,
+            //    OnWindowClosed);
+        }
+
+        private void UpdateDeviceCheckmarks(CoreAudioDevice selectedDevice, ContextMenuStrip menu)
+        {
+            foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
+            {
+                item.Checked = (item.Tag as CoreAudioDevice)?.Id == selectedDevice?.Id;
+            }
+        }
+
+        private void UpdateUI(Action action)
+        {
+            if (trayIcon.ContextMenuStrip.InvokeRequired)
+            {
+                trayIcon.ContextMenuStrip.Invoke(new MethodInvoker(action));
+            }
+            else
+            {
+                action();
+            }
+        }
+
+        private void SetDefaultAudio(
+            ContextMenuStrip menu,
+            IEnumerable<ToolStripMenuItem> audioListItems
+        )
+        {
+            var tvDevice = audioListItems.FirstOrDefault(d => d.Text.Contains("TV"));
+
+            if (tvDevice != null)
+            {
+                selectedDevice = (CoreAudioDevice)tvDevice.Tag;
+                UpdateDeviceCheckmarks(selectedDevice, menu);
+            }
+            else
+            {
+                var defaultAudio = audioListItems.FirstOrDefault(d =>
+                    (d.Tag as CoreAudioDevice).IsDefaultDevice
+                );
+                selectedDevice = (CoreAudioDevice)defaultAudio.Tag;
+                UpdateDeviceCheckmarks(selectedDevice, menu);
+            }
+            ;
         }
 
         void Exit(object sender, EventArgs e)
