@@ -147,6 +147,13 @@ namespace BigPictureManager
                 .GetPlaybackDevices()
                 .Where(d => d.State == DeviceState.Active);
 
+            if (deviceItems.Count() == 0)
+            {
+                AudioMenuItem.Text = "No playback devices found";
+                AudioMenuItem.Enabled = false;
+                return null;
+            }
+
             var audioListItems = deviceItems.Select(
                 (device, index) =>
                 {
