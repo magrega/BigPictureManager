@@ -41,6 +41,19 @@ namespace BigPictureManager
         private readonly bool isTurnOffBT = Properties.Settings.Default.isTurnOffBT;
         private readonly bool isAutoStart = Properties.Settings.Default.isAutoStart;
 
+        public BigPictureTray()
+        {
+            trayIcon = new NotifyIcon()
+            {
+                Icon = Resources.TrayIcon,
+                Visible = true,
+                Text = AppName,
+                ContextMenuStrip = CreateMainMenu(),
+            };
+            InitializeAsync();
+            ListenForBP();
+        }
+
         private async void InitializeAsync()
         {
             var tempMenu = new ContextMenuStrip();
@@ -60,30 +73,20 @@ namespace BigPictureManager
             AudioMenuItem.DropDown = audioMenu;
         }
 
-        public BigPictureTray()
-        {
-            trayIcon = new NotifyIcon()
-            {
-                Icon = Resources.TrayIcon,
-                Visible = true,
-                Text = AppName,
-                ContextMenuStrip = CreateMainMenu(),
-            };
-            InitializeAsync();
-            ListenForBP();
-        }
-
         private ContextMenuStrip CreateMainMenu()
         {
             var menu = new ContextMenuStrip();
 
             AudioMenuItem = new ToolStripMenuItem("Choose Audio Device");
             var SeparatorMenuItem = new ToolStripSeparator();
-            BTMenuItem = new ToolStripMenuItem("Turn off Bluetooth on BP close")
+            bool isBTAvailable = BluetoothDevice != null;
+            BTMenuItem = new ToolStripMenuItem()
             {
+                Text = isBTAvailable ? "Turn off Bluetooth on BP close" : "No Bluetooth available",
                 CheckOnClick = true,
-                Checked = isTurnOffBT,
-                Enabled = BluetoothDevice != null,
+                Checked = isBTAvailable || isTurnOffBT,
+                Enabled = isBTAvailable,
+                ToolTipText = "Turn off Bluetooth on Big Picture exit"
             };
             BTMenuItem.Click += (s, e) =>
             {
