@@ -56,20 +56,17 @@ namespace BigPictureManager
 
         private async void InitializeAsync()
         {
-            var tempMenu = new ContextMenuStrip();
-            tempMenu.Items.Add("Loading audio devices...");
-            AudioMenuItem.DropDown = tempMenu;
             var audioMenu = await Task.Run(() => CreateAudioMenu());
             BluetoothDevice = await RequestBluetoothDevice();
+            bool isBTAvailable = BluetoothDevice != null;
+            BTMenuItem.Text = isBTAvailable
+                ? "Turn off Bluetooth on BP close"
+                : "No Bluetooth available";
+            BTMenuItem.Checked = isBTAvailable && isTurnOffBT;
+            BTMenuItem.Enabled = isBTAvailable;
 
-            await Task.Run(() =>
-            {
-                UpdateUI(() =>
-                {
-                    tempMenu.Dispose();
-                });
-            });
-
+            AudioMenuItem.Text = "Choose Audio Device";
+            AudioMenuItem.Enabled = true;
             AudioMenuItem.DropDown = audioMenu;
         }
 
@@ -77,16 +74,15 @@ namespace BigPictureManager
         {
             var menu = new ContextMenuStrip();
 
-            AudioMenuItem = new ToolStripMenuItem("Choose Audio Device");
+            AudioMenuItem = new ToolStripMenuItem("Loading audio devices...") { Enabled = false };
             var SeparatorMenuItem = new ToolStripSeparator();
             bool isBTAvailable = BluetoothDevice != null;
             BTMenuItem = new ToolStripMenuItem()
             {
-                Text = isBTAvailable ? "Turn off Bluetooth on BP close" : "No Bluetooth available",
+                Text = "No Bluetooth available",
+                Enabled = false,
                 CheckOnClick = true,
-                Checked = isBTAvailable || isTurnOffBT,
-                Enabled = isBTAvailable,
-                ToolTipText = "Turn off Bluetooth on Big Picture exit"
+                ToolTipText = "Turn off Bluetooth on Big Picture exit",
             };
             BTMenuItem.Click += (s, e) =>
             {
