@@ -1,14 +1,14 @@
-﻿using AudioSwitcher.AudioApi;
-using AudioSwitcher.AudioApi.CoreAudio;
-using BigPictureManager.Properties;
+﻿using BigPictureManager.Properties;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Windows.Forms;
 using Windows.Devices.Radios;
+using static BigPictureManager.NativeAudioApi;
 
 namespace BigPictureManager
 {
@@ -30,19 +30,20 @@ namespace BigPictureManager
     {
         private static readonly string BPWindowName = "Steam Big Picture Mode";
         private static readonly string AppName = "Big Picture Audio Switcher";
+        private readonly SynchronizationContext uiContext;
         private AutomationElement targetWindow;
-        private CoreAudioDevice prevDevice;
-        private CoreAudioDevice selectedDevice;
-        private CoreAudioController controller;
+        private AudioDevice prevDevice;
+        private AudioDevice selectedDevice;
         private readonly NotifyIcon trayIcon;
         private ToolStripMenuItem AudioMenuItem;
         private ToolStripMenuItem BTMenuItem;
         private Radio BluetoothDevice = null;
-        private readonly bool isTurnOffBT = Properties.Settings.Default.isTurnOffBT;
-        private readonly bool isAutoStart = Properties.Settings.Default.isAutoStart;
+        private readonly bool isTurnOffBT = Settings.Default.isTurnOffBT;
+        private readonly bool isAutoStart = Settings.Default.isAutoStart;
 
         public BigPictureTray()
         {
+            uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
             trayIcon = new NotifyIcon()
             {
                 Icon = Resources.TrayIcon,
@@ -56,7 +57,7 @@ namespace BigPictureManager
 
         private async void InitializeAsync()
         {
-            var audioMenu = await Task.Run(() => CreateAudioMenu());
+            var audioMenu =  CreateAudioMenu();
             BluetoothDevice = await RequestBluetoothDevice();
             bool isBTAvailable = BluetoothDevice != null;
             BTMenuItem.Text = isBTAvailable
@@ -88,13 +89,13 @@ namespace BigPictureManager
             {
                 if (BTMenuItem.Checked)
                 {
-                    Properties.Settings.Default.isTurnOffBT = true;
+                    Settings.Default.isTurnOffBT = true;
                 }
                 else
                 {
-                    Properties.Settings.Default.isTurnOffBT = false;
+                    Settings.Default.isTurnOffBT = false;
                 }
-                Properties.Settings.Default.Save();
+                Settings.Default.Save();
             };
 
             var StartMenuItem = new ToolStripMenuItem("Launch on system start")
@@ -106,13 +107,13 @@ namespace BigPictureManager
             {
                 if (StartMenuItem.Checked)
                 {
-                    Properties.Settings.Default.isAutoStart = true;
+                    Settings.Default.isAutoStart = true;
                 }
                 else
                 {
-                    Properties.Settings.Default.isAutoStart = false;
+                    Settings.Default.isAutoStart = false;
                 }
-                Properties.Settings.Default.Save();
+                Settings.Default.Save();
                 SetStartup(StartMenuItem.Checked);
             };
 
@@ -136,12 +137,7 @@ namespace BigPictureManager
         {
             var menu = new ContextMenuStrip();
 
-            controller = new CoreAudioController();
-            prevDevice = controller.DefaultPlaybackDevice;
-
-            var deviceItems = controller
-                .GetPlaybackDevices()
-                .Where(d => d.State == DeviceState.Active);
+            var deviceItems = GetPlaybackDevices();
 
             if (deviceItems.Count() == 0)
             {
@@ -153,18 +149,17 @@ namespace BigPictureManager
             var audioListItems = deviceItems.Select(
                 (device, index) =>
                 {
-                    ToolStripMenuItem item = new ToolStripMenuItem(device.FullName)
+                    ToolStripMenuItem item = new ToolStripMenuItem(device.Name)
                     {
                         Tag = device,
                     };
 
                     item.Click += (sender, e) =>
                     {
-                        selectedDevice = (CoreAudioDevice)((ToolStripMenuItem)sender).Tag;
-                        Properties.Settings.Default.LastAudioDeviceId =
-                            selectedDevice.Id.ToString();
-                        Properties.Settings.Default.Save();
-
+                        selectedDevice = (AudioDevice)((ToolStripMenuItem)sender).Tag;
+                        Settings.Default.LastAudioDeviceId =
+                            selectedDevice.Id;
+                        Settings.Default.Save();
                         UpdateDeviceCheckmarks(selectedDevice, menu);
                     };
 
@@ -174,16 +169,16 @@ namespace BigPictureManager
 
             menu.Items.AddRange(audioListItems.Cast<ToolStripItem>().ToArray());
 
-            if (!string.IsNullOrEmpty(Properties.Settings.Default.LastAudioDeviceId))
+            if (!string.IsNullOrEmpty(Settings.Default.LastAudioDeviceId))
             {
-                var lastDeviceId = Guid.Parse(Properties.Settings.Default.LastAudioDeviceId);
+                var lastDeviceId = Settings.Default.LastAudioDeviceId;
                 var lastDeviceItem = audioListItems.FirstOrDefault(i =>
-                    ((CoreAudioDevice)i.Tag).Id == lastDeviceId
+                    ((AudioDevice)i.Tag).Id == lastDeviceId
                 );
 
                 if (lastDeviceItem != null)
                 {
-                    selectedDevice = (CoreAudioDevice)lastDeviceItem.Tag;
+                    selectedDevice = (AudioDevice)lastDeviceItem.Tag;
                     UpdateDeviceCheckmarks(selectedDevice, menu);
                 }
 
@@ -289,8 +284,11 @@ namespace BigPictureManager
                     if (isBP)
                     {
                         Console.WriteLine("Steam Big Picture Mode started!");
-                        prevDevice = controller.DefaultPlaybackDevice;
-                        selectedDevice.SetAsDefault();
+                        uiContext.Post(_ =>
+                        {
+                            prevDevice = GetDefaultDevice();
+                            SetDefaultDevice(selectedDevice.Id);
+                        }, null);
 
                         targetWindow = s as AutomationElement;
                         Automation.AddAutomationEventHandler(
@@ -322,22 +320,21 @@ namespace BigPictureManager
         async void OnWindowClosed(object sender, AutomationEventArgs e)
         {
             Console.WriteLine("Target window closed!");
-            prevDevice.SetAsDefault();
+            
+            uiContext.Post(_ =>
+            {
+                SetDefaultDevice(prevDevice.Id);
+            }, null);
 
             if (isTurnOffBT)
                 await TurnOffBluetoothAsync();
-
-            //Automation.RemoveAutomationEventHandler(
-            //    WindowPattern.WindowClosedEvent,
-            //    sender as AutomationElement,
-            //    OnWindowClosed);
         }
 
-        private void UpdateDeviceCheckmarks(CoreAudioDevice selectedDevice, ContextMenuStrip menu)
+        private void UpdateDeviceCheckmarks(AudioDevice selectedDevice, ContextMenuStrip menu)
         {
             foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
             {
-                item.Checked = (item.Tag as CoreAudioDevice)?.Id == selectedDevice?.Id;
+                item.Checked = (item.Tag as AudioDevice)?.Id == selectedDevice?.Id;
             }
         }
 
@@ -362,15 +359,13 @@ namespace BigPictureManager
 
             if (tvDevice != null)
             {
-                selectedDevice = (CoreAudioDevice)tvDevice.Tag;
+                selectedDevice = (AudioDevice)tvDevice.Tag;
                 UpdateDeviceCheckmarks(selectedDevice, menu);
             }
             else
             {
-                var defaultAudio = audioListItems.FirstOrDefault(d =>
-                    (d.Tag as CoreAudioDevice).IsDefaultDevice
-                );
-                selectedDevice = (CoreAudioDevice)defaultAudio.Tag;
+               
+                selectedDevice = GetDefaultDevice();
                 UpdateDeviceCheckmarks(selectedDevice, menu);
             }
             ;
