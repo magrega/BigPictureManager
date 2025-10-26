@@ -57,7 +57,7 @@ namespace BigPictureManager
 
         private async void InitializeAsync()
         {
-            var audioMenu =  CreateAudioMenu();
+            var audioMenu = CreateAudioMenu();
             BluetoothDevice = await RequestBluetoothDevice();
             bool isBTAvailable = BluetoothDevice != null;
             BTMenuItem.Text = isBTAvailable
@@ -77,7 +77,6 @@ namespace BigPictureManager
 
             AudioMenuItem = new ToolStripMenuItem("Loading audio devices...") { Enabled = false };
             var SeparatorMenuItem = new ToolStripSeparator();
-            bool isBTAvailable = BluetoothDevice != null;
             BTMenuItem = new ToolStripMenuItem()
             {
                 Text = "No Bluetooth available",
@@ -87,14 +86,7 @@ namespace BigPictureManager
             };
             BTMenuItem.Click += (s, e) =>
             {
-                if (BTMenuItem.Checked)
-                {
-                    Settings.Default.isTurnOffBT = true;
-                }
-                else
-                {
-                    Settings.Default.isTurnOffBT = false;
-                }
+                Settings.Default.isTurnOffBT = BTMenuItem.Checked;
                 Settings.Default.Save();
             };
 
@@ -105,14 +97,7 @@ namespace BigPictureManager
             };
             StartMenuItem.Click += (s, e) =>
             {
-                if (StartMenuItem.Checked)
-                {
-                    Settings.Default.isAutoStart = true;
-                }
-                else
-                {
-                    Settings.Default.isAutoStart = false;
-                }
+                Settings.Default.isAutoStart = StartMenuItem.Checked;
                 Settings.Default.Save();
                 SetStartup(StartMenuItem.Checked);
             };
@@ -317,7 +302,7 @@ namespace BigPictureManager
             }
         }
 
-        async void OnWindowClosed(object sender, AutomationEventArgs e)
+        private async void OnWindowClosed(object sender, AutomationEventArgs e)
         {
             Console.WriteLine("Target window closed!");
             
@@ -338,17 +323,7 @@ namespace BigPictureManager
             }
         }
 
-        private void UpdateUI(Action action)
-        {
-            if (trayIcon.ContextMenuStrip.InvokeRequired)
-            {
-                trayIcon.ContextMenuStrip.Invoke(new MethodInvoker(action));
-            }
-            else
-            {
-                action();
-            }
-        }
+
 
         private void SetDefaultAudio(
             ContextMenuStrip menu,
@@ -368,10 +343,9 @@ namespace BigPictureManager
                 selectedDevice = GetDefaultDevice();
                 UpdateDeviceCheckmarks(selectedDevice, menu);
             }
-            ;
         }
 
-        void Exit(object sender, EventArgs e)
+        private void Exit(object sender, EventArgs e)
         {
             Automation.RemoveAllEventHandlers();
             trayIcon.Visible = false;
