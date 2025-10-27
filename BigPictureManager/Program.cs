@@ -126,7 +126,7 @@ namespace BigPictureManager
 
             var deviceItems = GetPlaybackDevices();
 
-            if (deviceItems.Count() == 0)
+            if (deviceItems.Count == 0)
             {
                 AudioMenuItem.Text = "No playback devices found";
                 AudioMenuItem.Enabled = false;
@@ -230,7 +230,7 @@ namespace BigPictureManager
             return bluetoothRadio;
         }
 
-        public async Task<bool> ManageBluetoothAsync(RadioState radioState)
+        public async Task ManageBluetoothAsync(RadioState radioState)
         {
             try
             {
@@ -239,18 +239,15 @@ namespace BigPictureManager
                 if (bluetoothRadio == null)
                 {
                     Console.WriteLine("Bluetooth radio not found");
-                    return false;
                 } else
                 {
                     await bluetoothRadio.SetStateAsync(radioState);
-                    Console.WriteLine("Bluetooth state is set to ${radioState}");
-                    return true;
+                    Console.WriteLine($"Bluetooth state is set to ${radioState}");
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: {ex.Message}");
-                return false;
             }
         }
 
@@ -340,7 +337,7 @@ namespace BigPictureManager
 
         private void Exit(object sender, EventArgs e)
         {
-            Automation.RemoveAllEventHandlers();
+                Automation.RemoveAllEventHandlers();
             trayIcon.Visible = false;
             trayIcon.Dispose();
             Application.Exit();

@@ -119,9 +119,6 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="AudioSwitcher.AudioApi.CoreAudio">
-      <Version>3.0.3</Version>
-    </PackageReference>
     <PackageReference Include="Costura.Fody">
       <Version>6.0.0</Version>
       <!--<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>-->
