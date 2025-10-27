@@ -38,8 +38,8 @@ namespace BigPictureManager
         private ToolStripMenuItem AudioMenuItem;
         private ToolStripMenuItem BTMenuItem;
         private Radio BluetoothDevice = null;
-        private readonly bool isTurnOffBT = Settings.Default.isTurnOffBT;
-        private readonly bool isAutoStart = Settings.Default.isAutoStart;
+        private bool isTurnOffBT = Settings.Default.isTurnOffBT || false;
+        private bool isAutoStart = Settings.Default.isAutoStart || false;
 
         public BigPictureTray()
         {
@@ -86,7 +86,8 @@ namespace BigPictureManager
             };
             BTMenuItem.Click += (s, e) =>
             {
-                Settings.Default.isTurnOffBT = BTMenuItem.Checked;
+                isTurnOffBT = BTMenuItem.Checked;
+                Settings.Default.isTurnOffBT = isTurnOffBT;
                 Settings.Default.Save();
             };
 
@@ -97,7 +98,8 @@ namespace BigPictureManager
             };
             StartMenuItem.Click += (s, e) =>
             {
-                Settings.Default.isAutoStart = StartMenuItem.Checked;
+                isAutoStart = StartMenuItem.Checked;
+                Settings.Default.isAutoStart = isAutoStart;
                 Settings.Default.Save();
                 SetStartup(StartMenuItem.Checked);
             };
@@ -228,7 +230,7 @@ namespace BigPictureManager
             return bluetoothRadio;
         }
 
-        public async Task<bool> TurnOffBluetoothAsync()
+        public async Task<bool> ManageBluetoothAsync(RadioState radioState)
         {
             try
             {
@@ -238,17 +240,12 @@ namespace BigPictureManager
                 {
                     Console.WriteLine("Bluetooth radio not found");
                     return false;
-                }
-
-                if (bluetoothRadio.State != RadioState.Off)
+                } else
                 {
-                    await bluetoothRadio.SetStateAsync(RadioState.Off);
-                    Console.WriteLine("Bluetooth turned off successfully");
+                    await bluetoothRadio.SetStateAsync(radioState);
+                    Console.WriteLine("Bluetooth state is set to ${radioState}");
                     return true;
                 }
-
-                Console.WriteLine("Bluetooth is already off");
-                return true;
             }
             catch (Exception ex)
             {
@@ -305,14 +302,13 @@ namespace BigPictureManager
         private async void OnWindowClosed(object sender, AutomationEventArgs e)
         {
             Console.WriteLine("Target window closed!");
-            
             uiContext.Post(_ =>
             {
                 SetDefaultDevice(prevDevice.Id);
             }, null);
 
             if (isTurnOffBT)
-                await TurnOffBluetoothAsync();
+                await ManageBluetoothAsync(RadioState.Off);
         }
 
         private void UpdateDeviceCheckmarks(AudioDevice selectedDevice, ContextMenuStrip menu)
@@ -322,8 +318,6 @@ namespace BigPictureManager
                 item.Checked = (item.Tag as AudioDevice)?.Id == selectedDevice?.Id;
             }
         }
-
-
 
         private void SetDefaultAudio(
             ContextMenuStrip menu,
@@ -339,7 +333,6 @@ namespace BigPictureManager
             }
             else
             {
-               
                 selectedDevice = GetDefaultDevice();
                 UpdateDeviceCheckmarks(selectedDevice, menu);
             }
