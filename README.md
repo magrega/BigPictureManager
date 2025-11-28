@@ -13,6 +13,7 @@ TO-DO:
 7. ~~Check for a TV audio device to preset~~
 8. ~~Save app state~~
 9. Change audio only when BP is on TV
-10. Make it not trigger ms defender?
-11. Refactor the whole thing since C# is not my strong suit
-12. Turn off Xbox controller through API? (not possible now, no api available)
+10. Disallow Night Light when BP is on
+11. Make it not trigger ms defender?
+12. Refactor the whole thing since C# is not my strong suit
+13. Turn off Xbox controller through API? (not possible now, no api available)
