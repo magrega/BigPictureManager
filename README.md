@@ -17,3 +17,5 @@ TO-DO:
 11. Make it not trigger ms defender?
 12. Refactor the whole thing since C# is not my strong suit
 13. Turn off Xbox controller through API? (not possible now, no api available)
+
+For Night Light control functionality I thank this person: [Maclay74](https://github.com/Maclay74).
