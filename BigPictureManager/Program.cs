@@ -1,4 +1,4 @@
-﻿using BigPictureManager.Properties;
+using BigPictureManager.Properties;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -31,6 +31,8 @@ namespace BigPictureManager
     {
         private static readonly string BPWindowName = "Steam Big Picture Mode";
         private static readonly string AppName = "Big Picture Audio Switcher";
+        private static readonly string DebugLogPath =
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NightLightDebug.log");
         private readonly SynchronizationContext uiContext;
         private AutomationElement targetWindow;
         private AudioDevice prevDevice;
@@ -42,7 +44,6 @@ namespace BigPictureManager
         private bool isTurnOffBT = Settings.Default.isTurnOffBT || false;
         private bool isAutoStart = Settings.Default.isAutoStart || false;
         private readonly NightLight NightLight = new NightLight();
-        private bool isNightLightOnStart;
 
         public BigPictureTray()
         {
@@ -78,15 +79,13 @@ namespace BigPictureManager
         {
             if (!NightLight.Supported)
             {
-                Console.WriteLine("Night light isn’t supported on this machine.");
+                Log("Night light isn’t supported on this machine.");
                 return;
             }
-            isNightLightOnStart = NightLight.Enabled;
-            Console.WriteLine("Night light is supported on this machine.");
-            Console.WriteLine($"Current state: {(NightLight.Enabled ? "On" : "Off")}");
 
-            if (NightLight.Enabled) NightLight.Enabled = false; 
-
+            Log("Night light is supported on this machine.");
+            Log($"Current state: {(NightLight.Enabled ? "On" : "Off")}");
+            NightLight.DisableNightLight();
         }
         private ContextMenuStrip CreateMainMenu()
         {
@@ -122,7 +121,6 @@ namespace BigPictureManager
             };
 
             var ExitMenuItem = new ToolStripMenuItem("Exit");
-            var NightLightItem = new ToolStripMenuItem("The app will turn off Night Light on BP start.") { Enabled = false};
             ExitMenuItem.Click += new EventHandler(Exit);
 
             menu.Items.AddRange(
@@ -132,7 +130,6 @@ namespace BigPictureManager
                     SeparatorMenuItem,
                     BTMenuItem,
                     StartMenuItem,
-                    NightLightItem,
                     ExitMenuItem,
                 }
             );
@@ -240,7 +237,7 @@ namespace BigPictureManager
             var access = await Radio.RequestAccessAsync();
             if (access != RadioAccessStatus.Allowed)
             {
-                Console.WriteLine("Permission denied to control radios");
+                Log("Permission denied to control radios");
                 return null;
             }
 
@@ -257,16 +254,16 @@ namespace BigPictureManager
 
                 if (bluetoothRadio == null)
                 {
-                    Console.WriteLine("Bluetooth radio not found");
+                    Log("Bluetooth radio not found");
                 } else
                 {
                     await bluetoothRadio.SetStateAsync(radioState);
-                    Console.WriteLine($"Bluetooth state is set to ${radioState}");
+                    Log($"Bluetooth state is set to ${radioState}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error: {ex.Message}");
+                Log($"Error: {ex.Message}");
             }
         }
 
@@ -281,7 +278,7 @@ namespace BigPictureManager
                     bool isBP = IsBigPictureWindow(s);
                     if (isBP)
                     {
-                        Console.WriteLine("Steam Big Picture Mode started!");
+                        Log("Steam Big Picture Mode started!");
                         uiContext.Post(_ =>
                         {
                             HandleNightLight();
@@ -318,11 +315,19 @@ namespace BigPictureManager
 
         private async void OnWindowClosed(object sender, AutomationEventArgs e)
         {
-            Console.WriteLine("Steam Big Picture Mode closed!");
+            Log("Steam Big Picture Mode closed!");
             uiContext.Post(_ =>
             {
                 SetDefaultDevice(prevDevice.Id);
-                NightLight.Enabled = isNightLightOnStart;
+                 try
+            {
+                NightLight.RestoreNightLight();
+                Log("NightLight restored on exit.");
+            }
+            catch (Exception ex)
+            {
+                Log("NightLight restore on exit failed: " + ex.Message);
+            }
             }, null);
 
             if (isTurnOffBT)
@@ -359,9 +364,25 @@ namespace BigPictureManager
         private void Exit(object sender, EventArgs e)
         {
             Automation.RemoveAllEventHandlers();
+            Log("App exit requested.");
+           
             trayIcon.Visible = false;
             trayIcon.Dispose();
             Application.Exit();
+        }
+
+        private static void Log(string message)
+        {
+            var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}";
+            Console.WriteLine(line);
+            try
+            {
+                File.AppendAllText(DebugLogPath, line + Environment.NewLine);
+            }
+            catch
+            {
+                // Logging must never break app flow.
+            }
         }
     }
 }
