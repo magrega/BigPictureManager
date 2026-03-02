@@ -44,6 +44,8 @@ namespace BigPictureManager
         private bool isTurnOffBT = Settings.Default.isTurnOffBT || false;
         private bool isAutoStart = Settings.Default.isAutoStart || false;
         private readonly NightLight NightLight = new NightLight();
+        private readonly object audioRefreshSync = new object();
+        private CancellationTokenSource audioRefreshCts = new CancellationTokenSource();
 
         public BigPictureTray()
         {
@@ -56,12 +58,12 @@ namespace BigPictureManager
                 ContextMenuStrip = CreateMainMenu(),
             };
             InitializeAsync();
+            StartAudioDeviceMonitoring();
             ListenForBP();
         }
 
         private async void InitializeAsync()
         {
-            var audioMenu = CreateAudioMenu();
             BluetoothDevice = await RequestBluetoothDevice();
             bool isBTAvailable = BluetoothDevice != null;
             BTMenuItem.Text = isBTAvailable
@@ -69,10 +71,7 @@ namespace BigPictureManager
                 : "No Bluetooth available";
             BTMenuItem.Checked = isBTAvailable && isTurnOffBT;
             BTMenuItem.Enabled = isBTAvailable;
-
-            AudioMenuItem.Text = "Choose Audio Device";
-            AudioMenuItem.Enabled = true;
-            AudioMenuItem.DropDown = audioMenu;
+            QueueAudioDeviceRefresh(0);
         }
 
         private void HandleNightLight()
@@ -136,11 +135,71 @@ namespace BigPictureManager
             return menu;
         }
 
-        private ContextMenuStrip CreateAudioMenu()
+        private void StartAudioDeviceMonitoring()
+        {
+            NativeAudioApi.StartDeviceWatcher(() => QueueAudioDeviceRefresh(250));
+        }
+
+        private void QueueAudioDeviceRefresh(int debounceMs)
+        {
+            CancellationToken token;
+            lock (audioRefreshSync)
+            {
+                audioRefreshCts.Cancel();
+                audioRefreshCts.Dispose();
+                audioRefreshCts = new CancellationTokenSource();
+                token = audioRefreshCts.Token;
+            }
+
+            _ = RefreshAudioMenuAsync(token, debounceMs);
+        }
+
+        private async Task RefreshAudioMenuAsync(CancellationToken token, int debounceMs)
+        {
+            try
+            {
+                if (debounceMs > 0)
+                {
+                    await Task.Delay(debounceMs, token);
+                }
+
+                var deviceItems = await Task.Run(() => GetPlaybackDevices(), token);
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                uiContext.Post(_ => ApplyAudioDevicesToMenu(deviceItems), null);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during rapid device changes.
+            }
+            catch (Exception ex)
+            {
+                Log("Audio menu refresh failed: " + ex.Message);
+            }
+        }
+
+        private void ApplyAudioDevicesToMenu(List<AudioDevice> deviceItems)
+        {
+            var audioMenu = CreateAudioMenu(deviceItems);
+            if (audioMenu == null)
+            {
+                AudioMenuItem.Text = "No playback devices found";
+                AudioMenuItem.Enabled = false;
+                AudioMenuItem.DropDown = null;
+                return;
+            }
+
+            AudioMenuItem.Text = "Choose Audio Device";
+            AudioMenuItem.Enabled = true;
+            AudioMenuItem.DropDown = audioMenu;
+        }
+
+        private ContextMenuStrip CreateAudioMenu(List<AudioDevice> deviceItems)
         {
             var menu = new ContextMenuStrip();
-
-            var deviceItems = GetPlaybackDevices();
 
             if (deviceItems.Count == 0)
             {
@@ -283,7 +342,10 @@ namespace BigPictureManager
                         {
                             HandleNightLight();
                             prevDevice = GetDefaultDevice();
-                            SetDefaultDevice(selectedDevice.Id);
+                            if (selectedDevice != null && !string.IsNullOrWhiteSpace(selectedDevice.Id))
+                            {
+                                SetDefaultDevice(selectedDevice.Id);
+                            }
                         }, null);
 
                         targetWindow = s as AutomationElement;
@@ -318,16 +380,19 @@ namespace BigPictureManager
             Log("Steam Big Picture Mode closed!");
             uiContext.Post(_ =>
             {
-                SetDefaultDevice(prevDevice.Id);
-                 try
-            {
-                NightLight.RestoreNightLight();
-                Log("NightLight restored on exit.");
-            }
-            catch (Exception ex)
-            {
-                Log("NightLight restore on exit failed: " + ex.Message);
-            }
+                if (prevDevice != null && !string.IsNullOrWhiteSpace(prevDevice.Id))
+                {
+                    SetDefaultDevice(prevDevice.Id);
+                }
+                try
+                {
+                    NightLight.RestoreNightLight();
+                    Log("NightLight restored on exit.");
+                }
+                catch (Exception ex)
+                {
+                    Log("NightLight restore on exit failed: " + ex.Message);
+                }
             }, null);
 
             if (isTurnOffBT)
@@ -364,6 +429,13 @@ namespace BigPictureManager
         private void Exit(object sender, EventArgs e)
         {
             Automation.RemoveAllEventHandlers();
+            NativeAudioApi.StopDeviceWatcher();
+            lock (audioRefreshSync)
+            {
+                audioRefreshCts.Cancel();
+                audioRefreshCts.Dispose();
+                audioRefreshCts = new CancellationTokenSource();
+            }
             Log("App exit requested.");
            
             trayIcon.Visible = false;
