@@ -46,6 +46,8 @@ namespace BigPictureManager
     {
         private static readonly string BPWindowName = "Steam Big Picture Mode";
         private static readonly string AppName = "Big Picture Audio Switcher";
+        private static readonly string ProjectReadmeUrl =
+            "https://github.com/magrega/BigPictureManager/blob/master/README.md";
         private static readonly string DebugLogPath =
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NightLightDebug.log");
         private readonly SynchronizationContext uiContext;
@@ -160,6 +162,18 @@ namespace BigPictureManager
                 SetStartup(StartMenuItem.Checked);
             };
 
+            var aboutMenuItem = new ToolStripMenuItem("About");
+            aboutMenuItem.Click += (s, e) =>
+            {
+                Process.Start(
+                    new ProcessStartInfo
+                    {
+                        FileName = ProjectReadmeUrl,
+                        UseShellExecute = true,
+                    }
+                );
+            };
+
             var ExitMenuItem = new ToolStripMenuItem("Exit");
             ExitMenuItem.Click += new EventHandler(Exit);
 
@@ -170,6 +184,7 @@ namespace BigPictureManager
                     SeparatorMenuItem,
                     powerOffControllerMenuItem,
                     StartMenuItem,
+                    aboutMenuItem,
                     ExitMenuItem,
                 }
             );
