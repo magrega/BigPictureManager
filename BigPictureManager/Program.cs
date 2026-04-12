@@ -1,6 +1,8 @@
 using BigPictureManager.Properties;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Principal;
@@ -123,7 +125,7 @@ namespace BigPictureManager
                 Settings.Default.Save();
             };
 
-            XboxGipPowerOffMenuItem = new ToolStripMenuItem("Xbox Controller (Wireless)")
+            XboxGipPowerOffMenuItem = new ToolStripMenuItem("Wireless Xbox Controller")
             {
                 CheckOnClick = true,
                 ToolTipText = "Power off Xbox wireless controllers (XboxGIP) when Steam Big Picture closes",
@@ -132,6 +134,7 @@ namespace BigPictureManager
             {
                 if (!IsAdministrator())
                 {
+                    TryRestartElevatedForXboxGipFeature();
                     return;
                 }
 
@@ -198,17 +201,66 @@ namespace BigPictureManager
 
             if (IsAdministrator())
             {
-                XboxGipPowerOffMenuItem.Text = "Xbox Controller (Wireless)";
+                XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller";
                 XboxGipPowerOffMenuItem.Enabled = true;
                 XboxGipPowerOffMenuItem.CheckOnClick = true;
                 XboxGipPowerOffMenuItem.Checked = Settings.Default.isPowerOffXboxGipOnBpClose;
+                XboxGipPowerOffMenuItem.ToolTipText =
+                    "Power off Xbox wireless controllers (XboxGIP) when Steam Big Picture closes";
             }
             else
             {
-                XboxGipPowerOffMenuItem.Text = "Admin rights required";
-                XboxGipPowerOffMenuItem.Enabled = false;
+                XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller (admin rights)";
+                XboxGipPowerOffMenuItem.Enabled = true;
                 XboxGipPowerOffMenuItem.CheckOnClick = false;
                 XboxGipPowerOffMenuItem.Checked = false;
+                XboxGipPowerOffMenuItem.ToolTipText =
+                    "Restart this app as administrator to enable wireless Xbox controller power-off when Big Picture closes";
+            }
+        }
+
+        private const int ErrorCancelled = 1223;
+
+        private void TryRestartElevatedForXboxGipFeature()
+        {
+            try
+            {
+                var exePath = Application.ExecutablePath;
+                if (string.IsNullOrEmpty(exePath))
+                {
+                    MessageBox.Show(
+                        "Could not determine the application path to restart elevated.",
+                        AppName,
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                    return;
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    WorkingDirectory = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory,
+                    UseShellExecute = true,
+                    Verb = "runas",
+                };
+                Process.Start(psi);
+                Log("Restarting elevated after UAC for Xbox GIP feature.");
+                Exit(this, EventArgs.Empty);
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
+            {
+                Log("UAC prompt dismissed; staying non-elevated.");
+            }
+            catch (Exception ex)
+            {
+                Log("Failed to restart elevated: " + ex.Message);
+                MessageBox.Show(
+                    "Could not restart as administrator: " + ex.Message,
+                    AppName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
             }
         }
 
