@@ -123,10 +123,10 @@ namespace BigPictureManager
                 Settings.Default.Save();
             };
 
-            XboxGipPowerOffMenuItem = new ToolStripMenuItem("Power Off Xbox Controller (GIP)")
+            XboxGipPowerOffMenuItem = new ToolStripMenuItem("Xbox Controller (Wireless)")
             {
                 CheckOnClick = true,
-                ToolTipText = "Power off Xbox controllers (USB / XboxGIP) when Steam Big Picture closes",
+                ToolTipText = "Power off Xbox wireless controllers (XboxGIP) when Steam Big Picture closes",
             };
             XboxGipPowerOffMenuItem.Click += (s, e) =>
             {
@@ -139,6 +139,10 @@ namespace BigPictureManager
                 Settings.Default.Save();
             };
             ApplyXboxGipPowerOffMenuState();
+
+            var powerOffControllerMenuItem = new ToolStripMenuItem("Power Off Controller");
+            powerOffControllerMenuItem.DropDownItems.Add(BTMenuItem);
+            powerOffControllerMenuItem.DropDownItems.Add(XboxGipPowerOffMenuItem);
 
             var StartMenuItem = new ToolStripMenuItem("Launch on system start")
             {
@@ -161,8 +165,7 @@ namespace BigPictureManager
                 {
                     AudioMenuItem,
                     SeparatorMenuItem,
-                    BTMenuItem,
-                    XboxGipPowerOffMenuItem,
+                    powerOffControllerMenuItem,
                     StartMenuItem,
                     ExitMenuItem,
                 }
@@ -195,7 +198,7 @@ namespace BigPictureManager
 
             if (IsAdministrator())
             {
-                XboxGipPowerOffMenuItem.Text = "Power Off Xbox Controller (GIP)";
+                XboxGipPowerOffMenuItem.Text = "Xbox Controller (Wireless)";
                 XboxGipPowerOffMenuItem.Enabled = true;
                 XboxGipPowerOffMenuItem.CheckOnClick = true;
                 XboxGipPowerOffMenuItem.Checked = Settings.Default.isPowerOffXboxGipOnBpClose;
