@@ -260,7 +260,9 @@ namespace BigPictureManager
                     Verb = "runas",
                 };
                 Process.Start(psi);
-                Log("Restarting elevated after UAC for Xbox GIP feature.");
+                Settings.Default.isPowerOffXboxGipOnBpClose = true;
+                Settings.Default.Save();
+                Log("Restarting elevated after UAC for Xbox GIP feature (Xbox power-off enabled in settings).");
                 Exit(this, EventArgs.Empty);
             }
             catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
@@ -492,7 +494,10 @@ namespace BigPictureManager
                             }
                         }, null);
 
-                        DiscoverXboxGipControllersForCurrentBpSession();
+                        if (IsAdministrator() && Settings.Default.isPowerOffXboxGipOnBpClose)
+                        {
+                            DiscoverXboxGipControllersForCurrentBpSession();
+                        }
 
                         targetWindow = s as AutomationElement;
                         Automation.AddAutomationEventHandler(
