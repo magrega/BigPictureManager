@@ -58,7 +58,10 @@ namespace BigPictureManager
         private Radio BluetoothDevice = null;
         private bool isTurnOffBT = Settings.Default.isTurnOffBT || false;
         private bool isAutoStart = Settings.Default.isAutoStart || false;
+        private bool isTurnOffNightLightOnBpStart = Settings.Default.isTurnOffNightLightOnBpStart;
+        private bool restoreNightLightAfterBigPicture;
         private ToolStripMenuItem XboxGipPowerOffMenuItem;
+        private ToolStripMenuItem NightLightBpMenuItem;
         private readonly object _xboxGipIdsSync = new object();
         private List<ulong> _xboxGipDeviceIdsFromLastBpOpen;
         private readonly NightLight NightLight = new NightLight();
@@ -143,6 +146,7 @@ namespace BigPictureManager
             BpmLog.WriteLine("[NightLight] Night light is supported on this machine.");
             BpmLog.WriteLine("[NightLight] Current state: " + (NightLight.Enabled ? "On" : "Off"));
             NightLight.DisableNightLight();
+            restoreNightLightAfterBigPicture = true;
         }
         private ContextMenuStrip CreateMainMenu()
         {
@@ -183,6 +187,19 @@ namespace BigPictureManager
             };
             ApplyXboxGipPowerOffMenuState();
 
+            NightLightBpMenuItem = new ToolStripMenuItem("Turn off Night Light on BP start")
+            {
+                CheckOnClick = true,
+                Checked = isTurnOffNightLightOnBpStart,
+                ToolTipText = "Disable Windows Night Light when Steam Big Picture opens, then restore it when Big Picture closes",
+            };
+            NightLightBpMenuItem.Click += (s, e) =>
+            {
+                isTurnOffNightLightOnBpStart = NightLightBpMenuItem.Checked;
+                Settings.Default.isTurnOffNightLightOnBpStart = isTurnOffNightLightOnBpStart;
+                Settings.Default.Save();
+            };
+
             var powerOffControllerMenuItem = new ToolStripMenuItem("Power Off Controller");
             powerOffControllerMenuItem.DropDownItems.Add(BTMenuItem);
             powerOffControllerMenuItem.DropDownItems.Add(XboxGipPowerOffMenuItem);
@@ -220,6 +237,7 @@ namespace BigPictureManager
                 {
                     AudioMenuItem,
                     SeparatorMenuItem,
+                    NightLightBpMenuItem,
                     powerOffControllerMenuItem,
                     StartMenuItem,
                     aboutMenuItem,
@@ -526,7 +544,15 @@ namespace BigPictureManager
                         BpmLog.WriteLine("[Main] Steam Big Picture Mode started!");
                         uiContext.Post(_ =>
                         {
-                            HandleNightLight();
+                            if (isTurnOffNightLightOnBpStart)
+                            {
+                                HandleNightLight();
+                            }
+                            else
+                            {
+                                BpmLog.WriteLine("[NightLight] Turn off on Big Picture start is disabled in the menu; skipping.");
+                            }
+
                             prevDevice = GetDefaultDevice();
                             if (selectedDevice != null && !string.IsNullOrWhiteSpace(selectedDevice.Id))
                             {
@@ -575,14 +601,21 @@ namespace BigPictureManager
                 {
                     TrySetDefaultPlaybackDevice(prevDevice, "Big Picture closed (restore previous default)");
                 }
-                try
+                if (restoreNightLightAfterBigPicture)
                 {
-                    NightLight.RestoreNightLight();
-                    BpmLog.WriteLine("[NightLight] Night Light restored on Big Picture exit.");
-                }
-                catch (Exception ex)
-                {
-                    BpmLog.WriteLine("[Error] [NightLight] Restore on Big Picture exit failed: " + ex.Message);
+                    try
+                    {
+                        NightLight.RestoreNightLight();
+                        BpmLog.WriteLine("[NightLight] Night Light restored on Big Picture exit.");
+                    }
+                    catch (Exception ex)
+                    {
+                        BpmLog.WriteLine("[Error] [NightLight] Restore on Big Picture exit failed: " + ex.Message);
+                    }
+                    finally
+                    {
+                        restoreNightLightAfterBigPicture = false;
+                    }
                 }
             }, null);
 

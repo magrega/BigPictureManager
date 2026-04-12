@@ -70,5 +70,17 @@ namespace BigPictureManager.Properties {
                 this["isPowerOffXboxGipOnBpClose"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool isTurnOffNightLightOnBpStart {
+            get {
+                return ((bool)(this["isTurnOffNightLightOnBpStart"]));
+            }
+            set {
+                this["isTurnOffNightLightOnBpStart"] = value;
+            }
+        }
     }
 }
