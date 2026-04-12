@@ -91,6 +91,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="NativeAudioApi.cs" />
+    <Compile Include="XboxGipPowerOff.cs" />
     <Compile Include="NightLight.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

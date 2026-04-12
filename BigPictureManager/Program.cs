@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
@@ -19,8 +20,20 @@ namespace BigPictureManager
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            if (
+                XboxGipPowerOff.TryParseServiceArgs(
+                    args ?? new string[0],
+                    out var xboxPowerOffTargetIndex,
+                    out var xboxExplicitDeviceIds
+                )
+            )
+            {
+                Environment.Exit(XboxGipPowerOff.RunServiceMode(xboxPowerOffTargetIndex, xboxExplicitDeviceIds));
+                return;
+            }
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new BigPictureTray());
@@ -43,6 +56,9 @@ namespace BigPictureManager
         private Radio BluetoothDevice = null;
         private bool isTurnOffBT = Settings.Default.isTurnOffBT || false;
         private bool isAutoStart = Settings.Default.isAutoStart || false;
+        private ToolStripMenuItem XboxGipPowerOffMenuItem;
+        private readonly object _xboxGipIdsSync = new object();
+        private List<ulong> _xboxGipDeviceIdsFromLastBpOpen;
         private readonly NightLight NightLight = new NightLight();
         private readonly object audioRefreshSync = new object();
         private CancellationTokenSource audioRefreshCts = new CancellationTokenSource();
@@ -89,6 +105,7 @@ namespace BigPictureManager
         private ContextMenuStrip CreateMainMenu()
         {
             var menu = new ContextMenuStrip();
+            menu.Opening += (s, e) => ApplyXboxGipPowerOffMenuState();
 
             AudioMenuItem = new ToolStripMenuItem("Loading audio devices...") { Enabled = false };
             var SeparatorMenuItem = new ToolStripSeparator();
@@ -105,6 +122,23 @@ namespace BigPictureManager
                 Settings.Default.isTurnOffBT = isTurnOffBT;
                 Settings.Default.Save();
             };
+
+            XboxGipPowerOffMenuItem = new ToolStripMenuItem("Power Off Xbox Controller (GIP)")
+            {
+                CheckOnClick = true,
+                ToolTipText = "Power off Xbox controllers (USB / XboxGIP) when Steam Big Picture closes",
+            };
+            XboxGipPowerOffMenuItem.Click += (s, e) =>
+            {
+                if (!IsAdministrator())
+                {
+                    return;
+                }
+
+                Settings.Default.isPowerOffXboxGipOnBpClose = XboxGipPowerOffMenuItem.Checked;
+                Settings.Default.Save();
+            };
+            ApplyXboxGipPowerOffMenuState();
 
             var StartMenuItem = new ToolStripMenuItem("Launch on system start")
             {
@@ -128,11 +162,51 @@ namespace BigPictureManager
                     AudioMenuItem,
                     SeparatorMenuItem,
                     BTMenuItem,
+                    XboxGipPowerOffMenuItem,
                     StartMenuItem,
                     ExitMenuItem,
                 }
             );
             return menu;
+        }
+
+        private static bool IsAdministrator()
+        {
+            try
+            {
+                using (var identity = WindowsIdentity.GetCurrent())
+                {
+                    var principal = new WindowsPrincipal(identity);
+                    return principal.IsInRole(WindowsBuiltInRole.Administrator);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void ApplyXboxGipPowerOffMenuState()
+        {
+            if (XboxGipPowerOffMenuItem == null)
+            {
+                return;
+            }
+
+            if (IsAdministrator())
+            {
+                XboxGipPowerOffMenuItem.Text = "Power Off Xbox Controller (GIP)";
+                XboxGipPowerOffMenuItem.Enabled = true;
+                XboxGipPowerOffMenuItem.CheckOnClick = true;
+                XboxGipPowerOffMenuItem.Checked = Settings.Default.isPowerOffXboxGipOnBpClose;
+            }
+            else
+            {
+                XboxGipPowerOffMenuItem.Text = "Admin rights required";
+                XboxGipPowerOffMenuItem.Enabled = false;
+                XboxGipPowerOffMenuItem.CheckOnClick = false;
+                XboxGipPowerOffMenuItem.Checked = false;
+            }
         }
 
         private void StartAudioDeviceMonitoring()
@@ -348,6 +422,8 @@ namespace BigPictureManager
                             }
                         }, null);
 
+                        DiscoverXboxGipControllersForCurrentBpSession();
+
                         targetWindow = s as AutomationElement;
                         Automation.AddAutomationEventHandler(
                             eventId: WindowPattern.WindowClosedEvent,
@@ -397,6 +473,74 @@ namespace BigPictureManager
 
             if (isTurnOffBT)
                 await ManageBluetoothAsync(RadioState.Off);
+
+            List<ulong> xboxGipSnapshot = null;
+            lock (_xboxGipIdsSync)
+            {
+                if (_xboxGipDeviceIdsFromLastBpOpen != null && _xboxGipDeviceIdsFromLastBpOpen.Count > 0)
+                {
+                    xboxGipSnapshot = new List<ulong>(_xboxGipDeviceIdsFromLastBpOpen);
+                }
+
+                _xboxGipDeviceIdsFromLastBpOpen = null;
+            }
+
+            if (Settings.Default.isPowerOffXboxGipOnBpClose && IsAdministrator())
+            {
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        if (xboxGipSnapshot != null && xboxGipSnapshot.Count > 0)
+                        {
+                            XboxGipPowerOff.PowerOffViaEphemeralService(-1, xboxGipSnapshot);
+                            Log(
+                                $"Xbox GIP power off invoked after Big Picture exit (cached {xboxGipSnapshot.Count} id(s), no discovery in service)."
+                            );
+                        }
+                        else
+                        {
+                            XboxGipPowerOff.PowerOffViaEphemeralService();
+                            Log("Xbox GIP power off invoked after Big Picture exit (full discovery in service).");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("Xbox GIP power off failed: " + ex.Message);
+                    }
+                });
+            }
+        }
+
+        /// <summary>
+        /// Discovers Xbox GIP controller IDs when Big Picture opens so shutdown can skip discovery in the elevated service.
+        /// </summary>
+        private void DiscoverXboxGipControllersForCurrentBpSession()
+        {
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var ids = XboxGipPowerOff.TryDiscoverGipControllers();
+                    lock (_xboxGipIdsSync)
+                    {
+                        _xboxGipDeviceIdsFromLastBpOpen = ids.Count > 0 ? ids : null;
+                    }
+
+                    if (ids.Count > 0)
+                    {
+                        Log($"Xbox GIP: cached {ids.Count} controller id(s) for this Big Picture session.");
+                    }
+                    else
+                    {
+                        Log("Xbox GIP: no controllers at Big Picture start (exit will use in-service discovery if power-off is enabled).");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log("Xbox GIP discovery at Big Picture start failed: " + ex.Message);
+                }
+            });
         }
 
         private void UpdateDeviceCheckmarks(AudioDevice selectedDevice, ContextMenuStrip menu)
