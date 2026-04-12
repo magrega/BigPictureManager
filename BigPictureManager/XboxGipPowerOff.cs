@@ -386,11 +386,21 @@ namespace BigPictureManager
             var explicitIds = _serviceExplicitDeviceIds;
             if (explicitIds != null && explicitIds.Count > 0)
             {
+                var ok = 0;
+                var fail = 0;
                 foreach (var id in explicitIds)
                 {
-                    PowerOffDevice(id);
+                    if (PowerOffDevice(id))
+                    {
+                        ok++;
+                    }
+                    else
+                    {
+                        fail++;
+                    }
                 }
 
+                LogPowerOffSummary(ok, fail, explicitIds.Count);
                 return;
             }
 
@@ -399,20 +409,64 @@ namespace BigPictureManager
 
             if (ids.Count == 0)
             {
+                BpmLog.WriteLine("[Xbox] No Xbox wireless controllers found to power off.");
                 return;
             }
 
+            var succeeded = 0;
+            var failed = 0;
+            var attempted = 0;
             if (targetIdx < 0)
             {
                 foreach (var id in ids)
                 {
-                    PowerOffDevice(id);
+                    attempted++;
+                    if (PowerOffDevice(id))
+                    {
+                        succeeded++;
+                    }
+                    else
+                    {
+                        failed++;
+                    }
                 }
             }
             else if (targetIdx < ids.Count)
             {
-                PowerOffDevice(ids[targetIdx]);
+                attempted = 1;
+                if (PowerOffDevice(ids[targetIdx]))
+                {
+                    succeeded++;
+                }
+                else
+                {
+                    failed++;
+                }
             }
+
+            if (attempted > 0)
+            {
+                LogPowerOffSummary(succeeded, failed, attempted);
+            }
+        }
+
+        private static void LogPowerOffSummary(int succeeded, int failed, int attempted)
+        {
+            if (attempted == 0)
+            {
+                BpmLog.WriteLine("[Xbox] No Xbox wireless controllers found to power off.");
+                return;
+            }
+
+            if (failed == 0 && succeeded > 0)
+            {
+                BpmLog.WriteLine("[Xbox] Controllers have been turned off (" + succeeded + " device(s)).");
+                return;
+            }
+
+            BpmLog.WriteLine(
+                "[Xbox] Power-off finished: " + succeeded + " succeeded, " + failed + " failed (of " + attempted + " device(s))."
+            );
         }
 
         private static void DiscoverDevices(List<ulong> ids, int max)

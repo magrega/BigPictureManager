@@ -48,8 +48,6 @@ namespace BigPictureManager
         private static readonly string AppName = "Big Picture Audio Switcher";
         private static readonly string ProjectReadmeUrl =
             "https://github.com/magrega/BigPictureManager/blob/master/README.md";
-        private static readonly string DebugLogPath =
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NightLightDebug.log");
         private readonly SynchronizationContext uiContext;
         private AutomationElement targetWindow;
         private AudioDevice prevDevice;
@@ -80,6 +78,46 @@ namespace BigPictureManager
             InitializeAsync();
             StartAudioDeviceMonitoring();
             ListenForBP();
+            LogApplicationStartup();
+        }
+
+        private void LogApplicationStartup()
+        {
+            BpmLog.WriteLine(
+                IsAdministrator()
+                    ? "[Main] Application started with administrator rights."
+                    : "[Main] Application started without administrator rights."
+            );
+            try
+            {
+                var ids = XboxGipPowerOff.TryDiscoverGipControllers();
+                BpmLog.WriteLine(
+                    "[Xbox] At startup: found " + ids.Count + " wireless Xbox controller(s) (GIP enumeration)."
+                );
+            }
+            catch (Exception ex)
+            {
+                BpmLog.WriteLine("[Error] [Xbox] Startup controller enumeration failed: " + ex.Message);
+            }
+        }
+
+        private static void TrySetDefaultPlaybackDevice(AudioDevice device, string reason)
+        {
+            if (device == null || string.IsNullOrWhiteSpace(device.Id))
+            {
+                BpmLog.WriteLine("[Audio] Cannot change default playback device (" + reason + "): no device selected.");
+                return;
+            }
+
+            if (!SetDefaultDevice(device.Id))
+            {
+                BpmLog.WriteLine(
+                    "[Error] [Audio] Failed to set default playback device to \"" + device.Name + "\" (" + reason + ")."
+                );
+                return;
+            }
+
+            BpmLog.WriteLine("[Audio] Default playback device set to \"" + device.Name + "\" (" + reason + ").");
         }
 
         private async void InitializeAsync()
@@ -98,12 +136,12 @@ namespace BigPictureManager
         {
             if (!NightLight.Supported)
             {
-                Log("Night light isn’t supported on this machine.");
+                BpmLog.WriteLine("[NightLight] Night light isn’t supported on this machine.");
                 return;
             }
 
-            Log("Night light is supported on this machine.");
-            Log($"Current state: {(NightLight.Enabled ? "On" : "Off")}");
+            BpmLog.WriteLine("[NightLight] Night light is supported on this machine.");
+            BpmLog.WriteLine("[NightLight] Current state: " + (NightLight.Enabled ? "On" : "Off"));
             NightLight.DisableNightLight();
         }
         private ContextMenuStrip CreateMainMenu()
@@ -262,16 +300,16 @@ namespace BigPictureManager
                 Process.Start(psi);
                 Settings.Default.isPowerOffXboxGipOnBpClose = true;
                 Settings.Default.Save();
-                Log("Restarting elevated after UAC for Xbox GIP feature (Xbox power-off enabled in settings).");
+                BpmLog.WriteLine("[Main] Restarting elevated after UAC for Xbox GIP feature (Xbox power-off enabled in settings).");
                 Exit(this, EventArgs.Empty);
             }
             catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
             {
-                Log("UAC prompt dismissed; staying non-elevated.");
+                BpmLog.WriteLine("[Main] UAC prompt dismissed; staying non-elevated.");
             }
             catch (Exception ex)
             {
-                Log("Failed to restart elevated: " + ex.Message);
+                BpmLog.WriteLine("[Error] [Main] Failed to restart elevated: " + ex.Message);
                 MessageBox.Show(
                     "Could not restart as administrator: " + ex.Message,
                     AppName,
@@ -323,7 +361,7 @@ namespace BigPictureManager
             }
             catch (Exception ex)
             {
-                Log("Audio menu refresh failed: " + ex.Message);
+                BpmLog.WriteLine("[Error] [Audio] Audio menu refresh failed: " + ex.Message);
             }
         }
 
@@ -369,6 +407,7 @@ namespace BigPictureManager
                             selectedDevice.Id;
                         Settings.Default.Save();
                         UpdateDeviceCheckmarks(selectedDevice, menu);
+                        TrySetDefaultPlaybackDevice(selectedDevice, "tray menu selection");
                     };
 
                     return item;
@@ -442,7 +481,7 @@ namespace BigPictureManager
             var access = await Radio.RequestAccessAsync();
             if (access != RadioAccessStatus.Allowed)
             {
-                Log("Permission denied to control radios");
+                BpmLog.WriteLine("[Error] [Bluetooth] Permission denied to control radios.");
                 return null;
             }
 
@@ -459,16 +498,17 @@ namespace BigPictureManager
 
                 if (bluetoothRadio == null)
                 {
-                    Log("Bluetooth radio not found");
-                } else
+                    BpmLog.WriteLine("[Bluetooth] Bluetooth radio not found.");
+                }
+                else
                 {
                     await bluetoothRadio.SetStateAsync(radioState);
-                    Log($"Bluetooth state is set to ${radioState}");
+                    BpmLog.WriteLine("[Bluetooth] Bluetooth state is set to " + radioState + ".");
                 }
             }
             catch (Exception ex)
             {
-                Log($"Error: {ex.Message}");
+                BpmLog.WriteLine("[Error] [Bluetooth] " + ex.Message);
             }
         }
 
@@ -483,14 +523,14 @@ namespace BigPictureManager
                     bool isBP = IsBigPictureWindow(s);
                     if (isBP)
                     {
-                        Log("Steam Big Picture Mode started!");
+                        BpmLog.WriteLine("[Main] Steam Big Picture Mode started!");
                         uiContext.Post(_ =>
                         {
                             HandleNightLight();
                             prevDevice = GetDefaultDevice();
                             if (selectedDevice != null && !string.IsNullOrWhiteSpace(selectedDevice.Id))
                             {
-                                SetDefaultDevice(selectedDevice.Id);
+                                TrySetDefaultPlaybackDevice(selectedDevice, "Big Picture opened");
                             }
                         }, null);
 
@@ -528,21 +568,21 @@ namespace BigPictureManager
 
         private async void OnWindowClosed(object sender, AutomationEventArgs e)
         {
-            Log("Steam Big Picture Mode closed!");
+            BpmLog.WriteLine("[Main] Steam Big Picture Mode closed!");
             uiContext.Post(_ =>
             {
                 if (prevDevice != null && !string.IsNullOrWhiteSpace(prevDevice.Id))
                 {
-                    SetDefaultDevice(prevDevice.Id);
+                    TrySetDefaultPlaybackDevice(prevDevice, "Big Picture closed (restore previous default)");
                 }
                 try
                 {
                     NightLight.RestoreNightLight();
-                    Log("NightLight restored on exit.");
+                    BpmLog.WriteLine("[NightLight] Night Light restored on Big Picture exit.");
                 }
                 catch (Exception ex)
                 {
-                    Log("NightLight restore on exit failed: " + ex.Message);
+                    BpmLog.WriteLine("[Error] [NightLight] Restore on Big Picture exit failed: " + ex.Message);
                 }
             }, null);
 
@@ -568,22 +608,32 @@ namespace BigPictureManager
                     {
                         if (xboxGipSnapshot != null && xboxGipSnapshot.Count > 0)
                         {
-                            XboxGipPowerOff.PowerOffViaEphemeralService(-1, xboxGipSnapshot);
-                            Log(
-                                $"Xbox GIP power off invoked after Big Picture exit (cached {xboxGipSnapshot.Count} id(s), no discovery in service)."
+                            BpmLog.WriteLine(
+                                "[Xbox] Invoking Xbox GIP power-off service after Big Picture exit (cached "
+                                    + xboxGipSnapshot.Count
+                                    + " controller id(s))."
                             );
+                            XboxGipPowerOff.PowerOffViaEphemeralService(-1, xboxGipSnapshot);
                         }
                         else
                         {
+                            BpmLog.WriteLine(
+                                "[Xbox] Invoking Xbox GIP power-off service after Big Picture exit (discovery in service)."
+                            );
                             XboxGipPowerOff.PowerOffViaEphemeralService();
-                            Log("Xbox GIP power off invoked after Big Picture exit (full discovery in service).");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Log("Xbox GIP power off failed: " + ex.Message);
+                        BpmLog.WriteLine("[Error] [Xbox] Xbox GIP power off failed: " + ex.Message);
                     }
                 });
+            }
+            else if (Settings.Default.isPowerOffXboxGipOnBpClose)
+            {
+                BpmLog.WriteLine(
+                    "[Xbox] Power-off after Big Picture exit skipped (restart the app as administrator to enable this feature)."
+                );
             }
         }
 
@@ -604,16 +654,18 @@ namespace BigPictureManager
 
                     if (ids.Count > 0)
                     {
-                        Log($"Xbox GIP: cached {ids.Count} controller id(s) for this Big Picture session.");
+                        BpmLog.WriteLine("[Xbox] Cached " + ids.Count + " controller id(s) for this Big Picture session.");
                     }
                     else
                     {
-                        Log("Xbox GIP: no controllers at Big Picture start (exit will use in-service discovery if power-off is enabled).");
+                        BpmLog.WriteLine(
+                            "[Xbox] No controllers at Big Picture start (exit will use in-service discovery if power-off is enabled)."
+                        );
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log("Xbox GIP discovery at Big Picture start failed: " + ex.Message);
+                    BpmLog.WriteLine("[Error] [Xbox] Discovery at Big Picture start failed: " + ex.Message);
                 }
             });
         }
@@ -655,25 +707,12 @@ namespace BigPictureManager
                 audioRefreshCts.Dispose();
                 audioRefreshCts = new CancellationTokenSource();
             }
-            Log("App exit requested.");
+            BpmLog.WriteLine("[Main] App exit requested.");
            
             trayIcon.Visible = false;
             trayIcon.Dispose();
             Application.Exit();
         }
 
-        private static void Log(string message)
-        {
-            var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}";
-            Console.WriteLine(line);
-            try
-            {
-                File.AppendAllText(DebugLogPath, line + Environment.NewLine);
-            }
-            catch
-            {
-                // Logging must never break app flow.
-            }
-        }
     }
 }

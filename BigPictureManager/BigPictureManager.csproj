@@ -90,6 +90,7 @@
     <Reference Include="UIAutomationTypes" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BpmLog.cs" />
     <Compile Include="NativeAudioApi.cs" />
     <Compile Include="XboxGipPowerOff.cs" />
     <Compile Include="NightLight.cs" />

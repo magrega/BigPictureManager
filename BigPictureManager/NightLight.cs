@@ -1,26 +1,21 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using Microsoft.Win32;
 
 namespace TinyScreen.Services
 {
     public sealed class NightLight : IDisposable
     {
-        private readonly Guid _sessionId = Guid.NewGuid();
         private readonly INightLightLogger _logger;
         private readonly NightLightRegistryStore _registry;
-        private readonly NightLightSnapshotStore _snapshots;
 
         private NightLightSnapshot _startupSnapshot;
         private bool _disposed;
 
         public NightLight()
         {
-            var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NightLightDebug.log");
-            _logger = new FileConsoleNightLightLogger(logPath);
+            _logger = new BpmNightLightLogger();
             _registry = new NightLightRegistryStore();
-            _snapshots = new NightLightSnapshotStore(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NightLightBackups"), _logger);
         }
 
         public bool Enabled
@@ -81,7 +76,6 @@ namespace TinyScreen.Services
             }
 
             _startupSnapshot = snapshot;
-            _snapshots.Save(snapshot);
 
             var mode = NightLightCodec.DetectStateMode(snapshot.StateBytes);
             var scheduleEnabledNow = NightLightCodec.IsScheduleEnabled(snapshot.SettingsBytes);
@@ -186,12 +180,7 @@ namespace TinyScreen.Services
                 return _startupSnapshot;
             }
 
-            var fromFile = _snapshots.LoadLatestForSession(_sessionId) ?? _snapshots.LoadLatestAny();
-            if (fromFile != null)
-            {
-                _logger.Info("[NightLight] RestoreNightLight() using snapshot from file.");
-            }
-            return fromFile;
+            return null;
         }
 
         private void ExecuteSemanticRestore(NightLightSnapshot snapshot)
@@ -293,8 +282,8 @@ namespace TinyScreen.Services
 
             return new NightLightSnapshot
             {
-                Version = NightLightSnapshotStore.SnapshotFormatVersion,
-                SessionId = _sessionId,
+                Version = NightLightSnapshot.SnapshotFormatVersion,
+                SessionId = Guid.Empty,
                 CreatedAtUtc = DateTime.UtcNow,
                 StatePath = statePath,
                 SettingsPath = settingsPath,
@@ -771,150 +760,10 @@ namespace TinyScreen.Services
         }
     }
 
-    internal sealed class NightLightSnapshotStore
+    internal sealed class NightLightSnapshot
     {
         internal const int SnapshotFormatVersion = 2;
 
-        private readonly string _directory;
-        private readonly INightLightLogger _logger;
-
-        internal NightLightSnapshotStore(string directory, INightLightLogger logger)
-        {
-            _directory = directory;
-            _logger = logger;
-        }
-
-        internal void Save(NightLightSnapshot snapshot)
-        {
-            if (snapshot == null || snapshot.StateBytes == null || snapshot.SettingsBytes == null)
-            {
-                return;
-            }
-
-            try
-            {
-                Directory.CreateDirectory(_directory);
-                var created = snapshot.CreatedAtUtc == default(DateTime) ? DateTime.UtcNow : snapshot.CreatedAtUtc;
-                var fileName = string.Format("NightLightSnapshot-{0:yyyyMMdd-HHmmss-fff}.bin", created);
-                var filePath = Path.Combine(_directory, fileName);
-
-                using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
-                using (var bw = new BinaryWriter(fs))
-                {
-                    bw.Write(SnapshotFormatVersion);
-                    bw.Write(created.ToBinary());
-                    bw.Write(snapshot.SessionId.ToString("N"));
-                    bw.Write(snapshot.StatePath ?? string.Empty);
-                    bw.Write(snapshot.SettingsPath ?? string.Empty);
-                    bw.Write(snapshot.StateBytes.Length);
-                    bw.Write(snapshot.StateBytes);
-                    bw.Write(snapshot.SettingsBytes.Length);
-                    bw.Write(snapshot.SettingsBytes);
-                }
-
-                _logger.Info("[NightLight] Snapshot saved: " + filePath);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("[NightLight] Snapshot save error: " + ex.Message);
-            }
-        }
-
-        internal NightLightSnapshot LoadLatestForSession(Guid sessionId)
-        {
-            return LoadLatestCore(delegate(NightLightSnapshot s) { return s.SessionId == sessionId; });
-        }
-
-        internal NightLightSnapshot LoadLatestAny()
-        {
-            return LoadLatestCore(delegate { return true; });
-        }
-
-        private NightLightSnapshot LoadLatestCore(Func<NightLightSnapshot, bool> predicate)
-        {
-            try
-            {
-                if (!Directory.Exists(_directory))
-                {
-                    return null;
-                }
-
-                var files = Directory.GetFiles(_directory, "NightLightSnapshot-*.bin");
-                Array.Sort(files, StringComparer.Ordinal);
-                for (int i = files.Length - 1; i >= 0; i--)
-                {
-                    NightLightSnapshot snapshot;
-                    if (TryReadSnapshot(files[i], out snapshot) && predicate(snapshot))
-                    {
-                        _logger.Info("[NightLight] Loaded snapshot file: " + files[i]);
-                        return snapshot;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("[NightLight] Snapshot load error: " + ex.Message);
-            }
-
-            return null;
-        }
-
-        private static bool TryReadSnapshot(string path, out NightLightSnapshot snapshot)
-        {
-            snapshot = null;
-            try
-            {
-                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (var br = new BinaryReader(fs))
-                {
-                    var version = br.ReadInt32();
-                    if (version != SnapshotFormatVersion)
-                    {
-                        return false;
-                    }
-
-                    var createdAt = DateTime.FromBinary(br.ReadInt64());
-                    var sessionRaw = br.ReadString();
-                    Guid sessionId;
-                    if (!Guid.TryParseExact(sessionRaw, "N", out sessionId))
-                    {
-                        return false;
-                    }
-
-                    var statePath = br.ReadString();
-                    var settingsPath = br.ReadString();
-                    var stateLen = br.ReadInt32();
-                    var state = br.ReadBytes(stateLen);
-                    var settingsLen = br.ReadInt32();
-                    var settings = br.ReadBytes(settingsLen);
-
-                    if (state.Length != stateLen || settings.Length != settingsLen)
-                    {
-                        return false;
-                    }
-
-                    snapshot = new NightLightSnapshot
-                    {
-                        Version = version,
-                        CreatedAtUtc = createdAt,
-                        SessionId = sessionId,
-                        StatePath = statePath,
-                        SettingsPath = settingsPath,
-                        StateBytes = state,
-                        SettingsBytes = settings
-                    };
-                    return true;
-                }
-            }
-            catch
-            {
-                return false;
-            }
-        }
-    }
-
-    internal sealed class NightLightSnapshot
-    {
         internal int Version;
         internal Guid SessionId;
         internal DateTime CreatedAtUtc;
@@ -928,40 +777,6 @@ namespace TinyScreen.Services
     {
         void Info(string message);
         void Error(string message);
-    }
-
-    internal sealed class FileConsoleNightLightLogger : INightLightLogger
-    {
-        private readonly string _logPath;
-
-        internal FileConsoleNightLightLogger(string logPath)
-        {
-            _logPath = logPath;
-        }
-
-        public void Info(string message)
-        {
-            Write(message);
-        }
-
-        public void Error(string message)
-        {
-            Write(message);
-        }
-
-        private void Write(string message)
-        {
-            var line = "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "] " + message;
-            Console.WriteLine(line);
-            try
-            {
-                File.AppendAllText(_logPath, line + Environment.NewLine);
-            }
-            catch
-            {
-                // Logging must never break app flow.
-            }
-        }
     }
 
     internal enum StateMode
