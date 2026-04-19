@@ -15,12 +15,13 @@ TO-DO:
 8. ~~Save app state~~
 9. ~~Turn Night Light off when BP starts~~
 10. ~~Turn off Wireless Xbox controller (the way's a bit hacky, might break in the future)~~
-11. Adapt UI for 2K+ screens
-12. Set autostart as admin
-13. Option to dim LED of an Xbox Controller
-14. Change audio only when BP is on TV
-15. Make it not trigger ms defender?
-16. Refactor the whole thing since C# is not my strong suit
+11. Pause music when BP starts?
+12. Adapt UI for 2K+ screens
+13. Set autostart as admin
+14. Option to dim LED of an Xbox Controller
+15. Change audio only when BP is on TV
+16. Make it not trigger ms defender?
+17. Refactor the whole thing since C# is not my strong suit
 
 For Night Light control functionality I thank this person: [Maclay74](https://github.com/Maclay74).
 For helping with Wireless Xbox Series Controller power off - [Leclowndu93150](https://github.com/Leclowndu93150).
