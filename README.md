@@ -17,8 +17,8 @@ TO-DO:
 10. ~~Turn off Wireless Xbox controller (the way's a bit hacky, might break in the future)~~
 11. Pause music when BP starts?
 12. Adapt UI for 2K+ screens
-13. Set autostart as admin
-14. Option to dim LED of an Xbox Controller
+13. ~~Set autostart as admin~~
+14. ~~Dim Xbox Controller LED~~
 15. Change audio only when BP is on TV
 16. Make it not trigger ms defender?
 17. Refactor the whole thing since C# is not my strong suit
