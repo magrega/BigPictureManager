@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <VersionMajor>1</VersionMajor>
+    <VersionMinor>0</VersionMinor>
+    <VersionBuildFile>$(MSBuildThisFileDirectory)version.build</VersionBuildFile>
+  </PropertyGroup>
+</Project>

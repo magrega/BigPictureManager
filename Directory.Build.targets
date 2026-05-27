@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!-- Debug: 1.0.0.0. Release: 1.0.{version.build}.0; version.build increments after each Release build. -->
+  <Target Name="ResolveAssemblyVersion" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <VersionBuild Condition="'$(Configuration)' != 'Release'">0</VersionBuild>
+    </PropertyGroup>
+
+    <ReadLinesFromFile
+      Condition="'$(Configuration)' == 'Release' and Exists('$(VersionBuildFile)')"
+      File="$(VersionBuildFile)"
+    >
+      <Output TaskParameter="Lines" ItemName="_VersionBuildLine" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+      <VersionBuild Condition="'@(_VersionBuildLine)' != ''">@(_VersionBuildLine)</VersionBuild>
+      <VersionBuild Condition="'@(_VersionBuildLine)' == ''">0</VersionBuild>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <AssemblyVersionFull>$(VersionMajor).$(VersionMinor).$(VersionBuild).0</AssemblyVersionFull>
+      <FileVersionFull>$(AssemblyVersionFull)</FileVersionFull>
+    </PropertyGroup>
+  </Target>
+
+  <Target
+    Name="GenerateAssemblyVersionFile"
+    BeforeTargets="BeforeCompile"
+    DependsOnTargets="ResolveAssemblyVersion"
+  >
+    <PropertyGroup>
+      <_AssemblyVersionFile>$(IntermediateOutputPath)AssemblyVersion.g.cs</_AssemblyVersionFile>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(IntermediateOutputPath)" Condition="!Exists('$(IntermediateOutputPath)')" />
+
+    <!-- Semicolons in WriteLinesToFile must be escaped as %3B (MSBuild treats ; as line separator). -->
+    <ItemGroup>
+      <_AssemblyVersionCodeLine Include="using System.Reflection%3B" />
+      <_AssemblyVersionCodeLine Include="[assembly: AssemblyVersion(&quot;$(AssemblyVersionFull)&quot;)]" />
+      <_AssemblyVersionCodeLine Include="[assembly: AssemblyFileVersion(&quot;$(FileVersionFull)&quot;)]" />
+    </ItemGroup>
+
+    <WriteLinesToFile
+      File="$(_AssemblyVersionFile)"
+      Lines="@(_AssemblyVersionCodeLine)"
+      Overwrite="true"
+    />
+
+    <ItemGroup>
+      <Compile Include="$(_AssemblyVersionFile)">
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Directory.Build.targets</DependentUpon>
+      </Compile>
+    </ItemGroup>
+  </Target>
+
+  <Target
+    Name="IncrementVersionBuildOnRelease"
+    AfterTargets="Build"
+    Condition="'$(Configuration)' == 'Release'"
+    DependsOnTargets="ResolveAssemblyVersion"
+  >
+    <PropertyGroup>
+      <_NextVersionBuild>$([MSBuild]::Add($(VersionBuild), 1))</_NextVersionBuild>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(VersionBuildFile)" Lines="$(_NextVersionBuild)" Overwrite="true" />
+  </Target>
+</Project>
