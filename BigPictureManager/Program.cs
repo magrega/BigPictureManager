@@ -217,7 +217,7 @@ namespace BigPictureManager
                 CheckOnClick = true,
                 Checked = isAutoStart,
                 ToolTipText =
-                    "Run Big Picture Manager at sign-in with administrator rights (required for Xbox controller power-off)",
+                    "Run at sign-in with admin rights",
             };
             _launchOnStartMenuItem.Click += OnLaunchOnStartMenuItemClick;
 
@@ -276,12 +276,12 @@ namespace BigPictureManager
 
             if (IsAdministrator())
             {
-                XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller";
+                XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller (admin)";
                 XboxGipPowerOffMenuItem.Enabled = true;
                 XboxGipPowerOffMenuItem.CheckOnClick = true;
                 XboxGipPowerOffMenuItem.Checked = Settings.Default.isPowerOffXboxGipOnBpClose;
                 XboxGipPowerOffMenuItem.ToolTipText =
-                    "Power off Xbox wireless controllers (XboxGIP) when Steam Big Picture closes";
+                    "Power off the controllers (XboxGIP) when Steam Big Picture closes";
             }
             else
             {
