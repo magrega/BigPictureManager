@@ -23,9 +23,11 @@ namespace BigPictureManager
         private bool _isTurnOffBt = Settings.Default.isTurnOffBT;
         private bool _isAutoStart = Settings.Default.isAutoStart;
         private bool _isTurnOffNightLightOnBpStart = Settings.Default.isTurnOffNightLightOnBpStart;
+        private bool _isPauseMediaOnBpStart = Settings.Default.isPauseMediaOnBpStart;
         private bool _restoreNightLightAfterBigPicture;
         private ToolStripMenuItem _xboxGipPowerOffMenuItem;
         private ToolStripMenuItem _nightLightBpMenuItem;
+        private ToolStripMenuItem _pauseMediaBpMenuItem;
         private ToolStripMenuItem _launchOnStartMenuItem;
         private readonly object _xboxGipIdsSync = new object();
         private List<ulong> _xboxGipDeviceIdsFromLastBpOpen;
@@ -123,6 +125,14 @@ namespace BigPictureManager
             };
             _nightLightBpMenuItem.Click += OnNightLightBpMenuItemClick;
 
+            _pauseMediaBpMenuItem = new ToolStripMenuItem(Resources.MenuPauseMedia)
+            {
+                CheckOnClick = true,
+                Checked = _isPauseMediaOnBpStart,
+                ToolTipText = Resources.TooltipPauseMediaBp,
+            };
+            _pauseMediaBpMenuItem.Click += OnPauseMediaBpMenuItemClick;
+
             var powerOffControllerMenuItem = new ToolStripMenuItem(Resources.MenuPowerOffController);
             powerOffControllerMenuItem.DropDownItems.Add(_btMenuItem);
             powerOffControllerMenuItem.DropDownItems.Add(_xboxGipPowerOffMenuItem);
@@ -147,6 +157,7 @@ namespace BigPictureManager
                     _audioMenuItem,
                     separatorMenuItem,
                     _nightLightBpMenuItem,
+                    _pauseMediaBpMenuItem,
                     powerOffControllerMenuItem,
                     _launchOnStartMenuItem,
                     aboutMenuItem,
@@ -167,6 +178,13 @@ namespace BigPictureManager
         {
             _isTurnOffNightLightOnBpStart = _nightLightBpMenuItem.Checked;
             Settings.Default.isTurnOffNightLightOnBpStart = _isTurnOffNightLightOnBpStart;
+            Settings.Default.Save();
+        }
+
+        private void OnPauseMediaBpMenuItemClick(object sender, EventArgs e)
+        {
+            _isPauseMediaOnBpStart = _pauseMediaBpMenuItem.Checked;
+            Settings.Default.isPauseMediaOnBpStart = _isPauseMediaOnBpStart;
             Settings.Default.Save();
         }
 

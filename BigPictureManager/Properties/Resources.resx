@@ -151,6 +151,9 @@
   <data name="MenuNightLightTurnOffOnBpStart" xml:space="preserve">
     <value>Turn off Night Light on BP start</value>
   </data>
+  <data name="MenuPauseMedia" xml:space="preserve">
+    <value>Pause media</value>
+  </data>
   <data name="MenuPowerOffController" xml:space="preserve">
     <value>Power Off Controller</value>
   </data>
@@ -179,6 +182,9 @@
   </data>
   <data name="TooltipNightLightBp" xml:space="preserve">
     <value>Disable Windows Night Light when Steam Big Picture opens, then restore it when Big Picture closes</value>
+  </data>
+  <data name="TooltipPauseMediaBp" xml:space="preserve">
+    <value>Pause media on BP start</value>
   </data>
   <data name="TooltipXboxGipPowerOff" xml:space="preserve">
     <value>Power off Xbox wireless controllers (XboxGIP) when Steam Big Picture closes</value>

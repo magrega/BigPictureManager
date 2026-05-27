@@ -130,6 +130,12 @@ namespace BigPictureManager.Properties {
             }
         }
         
+        internal static string MenuPauseMedia {
+            get {
+                return ResourceManager.GetString("MenuPauseMedia", resourceCulture);
+            }
+        }
+        
         internal static string MenuPowerOffController {
             get {
                 return ResourceManager.GetString("MenuPowerOffController", resourceCulture);
@@ -181,6 +187,12 @@ namespace BigPictureManager.Properties {
         internal static string TooltipNightLightBp {
             get {
                 return ResourceManager.GetString("TooltipNightLightBp", resourceCulture);
+            }
+        }
+        
+        internal static string TooltipPauseMediaBp {
+            get {
+                return ResourceManager.GetString("TooltipPauseMediaBp", resourceCulture);
             }
         }
         

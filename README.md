@@ -15,7 +15,7 @@ TO-DO:
 8. ~~Save app state~~
 9. ~~Turn Night Light off when BP starts~~
 10. ~~Turn off Wireless Xbox controller (the way's a bit hacky, might break in the future)~~
-11. Pause music when BP starts?
+11. ~~Pause music when BP starts?~~
 12. Adapt UI for 2K+ screens
 13. ~~Set autostart as admin~~
 14. ~~Dim Xbox Controller LED~~

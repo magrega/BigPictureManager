@@ -56,6 +56,17 @@ namespace BigPictureManager
                         );
                     }
 
+                    if (_isPauseMediaOnBpStart)
+                    {
+                        _ = Task.Run(async () => await SystemMediaPause.PauseAllPlayingAsync());
+                    }
+                    else
+                    {
+                        BpmLog.WriteLine(
+                            "[Media] Pause on Big Picture start is disabled in the menu; skipping."
+                        );
+                    }
+
                     _prevDevice = GetDefaultDevice();
                     if (_selectedDevice != null && !string.IsNullOrWhiteSpace(_selectedDevice.Id))
                     {

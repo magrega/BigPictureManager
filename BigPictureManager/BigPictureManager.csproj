@@ -103,6 +103,7 @@
     <Compile Include="NativeAudioApi.cs" />
     <Compile Include="NightLight.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="SystemMediaPause.cs" />
     <Compile Include="WindowsIdentityHelper.cs" />
     <Compile Include="XboxGipPowerOff.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

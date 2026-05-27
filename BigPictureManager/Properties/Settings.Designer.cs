@@ -118,5 +118,17 @@ namespace BigPictureManager.Properties {
                 this["isTurnOffNightLightOnBpStart"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool isPauseMediaOnBpStart {
+            get {
+                return ((bool)(this["isPauseMediaOnBpStart"]));
+            }
+            set {
+                this["isPauseMediaOnBpStart"] = value;
+            }
+        }
     }
 }
