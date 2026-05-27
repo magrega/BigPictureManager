@@ -14,7 +14,13 @@
     <Setting Name="pendingInstallElevatedStartupTask" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
+    <Setting Name="pendingUnregisterElevatedStartupTask" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
     <Setting Name="isPowerOffXboxGipOnBpClose" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="pendingEnableXboxGipPowerOff" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="isTurnOffNightLightOnBpStart" Type="System.Boolean" Scope="User">

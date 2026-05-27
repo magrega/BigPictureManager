@@ -9,6 +9,7 @@ using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
+using System.Drawing;
 using System.Windows.Forms;
 using Windows.Devices.Radios;
 using TinyScreen.Services;
@@ -90,6 +91,8 @@ namespace BigPictureManager
 
             SyncLaunchOnStartMenuState();
             TryCompletePendingElevatedStartupTaskInstall();
+            TryCompletePendingElevatedStartupTaskUnregister();
+            TryCompletePendingXboxGipPowerOffEnable();
             LogApplicationStartup();
         }
 
@@ -183,16 +186,7 @@ namespace BigPictureManager
                 CheckOnClick = true,
                 ToolTipText = "Power off Xbox wireless controllers (XboxGIP) when Steam Big Picture closes",
             };
-            XboxGipPowerOffMenuItem.Click += (s, e) =>
-            {
-                if (!IsAdministrator())
-                {
-                    return;
-                }
-
-                Settings.Default.isPowerOffXboxGipOnBpClose = XboxGipPowerOffMenuItem.Checked;
-                Settings.Default.Save();
-            };
+            XboxGipPowerOffMenuItem.Click += OnXboxGipPowerOffMenuItemClick;
             ApplyXboxGipPowerOffMenuState();
 
             NightLightBpMenuItem = new ToolStripMenuItem("Turn off Night Light on BP start")
@@ -276,22 +270,86 @@ namespace BigPictureManager
 
             if (IsAdministrator())
             {
-                XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller (admin)";
+                XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller";
                 XboxGipPowerOffMenuItem.Enabled = true;
+                XboxGipPowerOffMenuItem.ForeColor = SystemColors.ControlText;
                 XboxGipPowerOffMenuItem.CheckOnClick = true;
                 XboxGipPowerOffMenuItem.Checked = Settings.Default.isPowerOffXboxGipOnBpClose;
                 XboxGipPowerOffMenuItem.ToolTipText =
-                    "Power off the controllers (XboxGIP) when Steam Big Picture closes";
+                    "Power off Xbox wireless controllers (XboxGIP) when Steam Big Picture closes";
             }
             else
             {
                 XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller";
-                XboxGipPowerOffMenuItem.Enabled = false;
+                XboxGipPowerOffMenuItem.Enabled = true;
+                XboxGipPowerOffMenuItem.ForeColor = SystemColors.GrayText;
                 XboxGipPowerOffMenuItem.CheckOnClick = false;
                 XboxGipPowerOffMenuItem.Checked = false;
                 XboxGipPowerOffMenuItem.ToolTipText =
-                    "Enable \"Launch on system start\" to run with administrator rights, then turn on Xbox controller power-off";
+                    "Click to restart as administrator and enable Xbox controller power-off";
             }
+        }
+
+        private void OnXboxGipPowerOffMenuItemClick(object sender, EventArgs e)
+        {
+            if (IsAdministrator())
+            {
+                Settings.Default.isPowerOffXboxGipOnBpClose = XboxGipPowerOffMenuItem.Checked;
+                Settings.Default.Save();
+                BpmLog.WriteLine(
+                    "[Xbox] Wireless controller power-off "
+                        + (XboxGipPowerOffMenuItem.Checked ? "enabled" : "disabled")
+                        + " in settings."
+                );
+                return;
+            }
+
+            Settings.Default.pendingEnableXboxGipPowerOff = true;
+            Settings.Default.Save();
+            BpmLog.WriteLine("[Xbox] Requesting elevated restart to enable wireless controller power-off.");
+            RestartElevated(
+                "[Xbox] Restarting elevated to enable wireless controller power-off.",
+                onUacCancelled: ClearPendingXboxGipPowerOffEnable
+            );
+        }
+
+        private void TryCompletePendingXboxGipPowerOffEnable()
+        {
+            if (!Settings.Default.pendingEnableXboxGipPowerOff)
+            {
+                return;
+            }
+
+            if (!IsAdministrator())
+            {
+                BpmLog.WriteLine(
+                    "[Xbox] Pending wireless controller power-off enable was not completed (application is not elevated)."
+                );
+                ClearPendingXboxGipPowerOffEnable();
+                ApplyXboxGipPowerOffMenuState();
+                return;
+            }
+
+            var wasEnabledBefore = Settings.Default.isPowerOffXboxGipOnBpClose;
+            Settings.Default.isPowerOffXboxGipOnBpClose = true;
+            ClearPendingXboxGipPowerOffEnable();
+            ApplyXboxGipPowerOffMenuState();
+            BpmLog.WriteLine(
+                wasEnabledBefore
+                    ? "[Xbox] Wireless controller power-off re-enabled after elevated restart (was already on in settings)."
+                    : "[Xbox] Wireless controller power-off enabled after elevated restart."
+            );
+        }
+
+        private static void ClearPendingXboxGipPowerOffEnable()
+        {
+            if (!Settings.Default.pendingEnableXboxGipPowerOff)
+            {
+                return;
+            }
+
+            Settings.Default.pendingEnableXboxGipPowerOff = false;
+            Settings.Default.Save();
         }
 
         private const int ErrorCancelled = 1223;
@@ -349,27 +407,63 @@ namespace BigPictureManager
                 Settings.Default.pendingInstallElevatedStartupTask = true;
                 Settings.Default.Save();
                 BpmLog.WriteLine("[Startup] Launch on system start enabled; requesting elevated restart to create the scheduled task.");
-                RestartElevatedForStartupTask();
+                RestartElevated(
+                    "[Startup] Restarting elevated to create the scheduled startup task.",
+                    onUacCancelled: () =>
+                    {
+                        ClearPendingStartupTaskInstall();
+                        if (_launchOnStartMenuItem != null)
+                        {
+                            _launchOnStartMenuItem.Checked = false;
+                        }
+                    },
+                    onRestartFailed: () =>
+                    {
+                        ClearPendingStartupTaskInstall();
+                        if (_launchOnStartMenuItem != null)
+                        {
+                            _launchOnStartMenuItem.Checked = false;
+                        }
+                    }
+                );
                 return;
             }
 
             ClearPendingStartupTaskInstall();
 
-            if (!ElevatedLogonStartupTask.TryUnregister(out var unregisterError))
+            if (!IsAdministrator() && ElevatedLogonStartupTask.IsRegistered())
             {
-                _launchOnStartMenuItem.Checked = true;
-                MessageBox.Show(
-                    "Could not remove the startup task:\n" + unregisterError,
-                    AppName,
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
+                Settings.Default.pendingUnregisterElevatedStartupTask = true;
+                Settings.Default.Save();
+                BpmLog.WriteLine(
+                    "[Startup] Launch on system start disabled; requesting elevated restart to remove the scheduled task."
+                );
+                RestartElevated(
+                    "[Startup] Restarting elevated to remove the scheduled startup task.",
+                    onUacCancelled: () =>
+                    {
+                        ClearPendingStartupTaskUnregister();
+                        if (_launchOnStartMenuItem != null)
+                        {
+                            _launchOnStartMenuItem.Checked = true;
+                        }
+                    },
+                    onRestartFailed: () =>
+                    {
+                        ClearPendingStartupTaskUnregister();
+                        if (_launchOnStartMenuItem != null)
+                        {
+                            _launchOnStartMenuItem.Checked = true;
+                        }
+                    }
                 );
                 return;
             }
 
-            isAutoStart = false;
-            Settings.Default.isAutoStart = false;
-            Settings.Default.Save();
+            if (!CompleteStartupTaskUnregister())
+            {
+                _launchOnStartMenuItem.Checked = true;
+            }
         }
 
         private void TryCompletePendingElevatedStartupTaskInstall()
@@ -427,6 +521,64 @@ namespace BigPictureManager
             CompleteStartupTaskInstallSuccess();
         }
 
+        private void TryCompletePendingElevatedStartupTaskUnregister()
+        {
+            if (!Settings.Default.pendingUnregisterElevatedStartupTask)
+            {
+                return;
+            }
+
+            if (!IsAdministrator())
+            {
+                BpmLog.WriteLine(
+                    "[Startup] Pending scheduled-task removal was not completed (application is not elevated)."
+                );
+                ClearPendingStartupTaskUnregister();
+                if (_launchOnStartMenuItem != null)
+                {
+                    _launchOnStartMenuItem.Checked = true;
+                }
+
+                return;
+            }
+
+            BpmLog.WriteLine("[Startup] Completing pending scheduled-task removal (elevated).");
+            if (!CompleteStartupTaskUnregister() && _launchOnStartMenuItem != null)
+            {
+                _launchOnStartMenuItem.Checked = true;
+            }
+        }
+
+        /// <summary>
+        /// Deletes the logon scheduled task and clears autostart settings. Returns false on failure.
+        /// </summary>
+        private bool CompleteStartupTaskUnregister()
+        {
+            if (!ElevatedLogonStartupTask.TryUnregister(out var unregisterError))
+            {
+                BpmLog.WriteLine("[Error] [Startup] Failed to remove scheduled task: " + unregisterError);
+                MessageBox.Show(
+                    "Could not remove the startup task:\n" + unregisterError,
+                    AppName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return false;
+            }
+
+            ClearPendingStartupTaskUnregister();
+            isAutoStart = false;
+            Settings.Default.isAutoStart = false;
+            Settings.Default.Save();
+            if (_launchOnStartMenuItem != null)
+            {
+                _launchOnStartMenuItem.Checked = false;
+            }
+
+            BpmLog.WriteLine("[Startup] Launch on system start is disabled.");
+            return true;
+        }
+
         private void CompleteStartupTaskInstallSuccess()
         {
             ClearPendingStartupTaskInstall();
@@ -452,16 +604,30 @@ namespace BigPictureManager
             Settings.Default.Save();
         }
 
-        private void RestartElevatedForStartupTask()
+        private static void ClearPendingStartupTaskUnregister()
+        {
+            if (!Settings.Default.pendingUnregisterElevatedStartupTask)
+            {
+                return;
+            }
+
+            Settings.Default.pendingUnregisterElevatedStartupTask = false;
+            Settings.Default.Save();
+        }
+
+        private void RestartElevated(
+            string logMessage,
+            Action onUacCancelled = null,
+            Action onRestartFailed = null
+        )
         {
             try
             {
                 var exePath = Application.ExecutablePath;
                 if (string.IsNullOrEmpty(exePath))
                 {
-                    BpmLog.WriteLine("[Error] [Startup] Cannot restart elevated: application path is empty.");
-                    ClearPendingStartupTaskInstall();
-                    _launchOnStartMenuItem.Checked = false;
+                    BpmLog.WriteLine("[Error] [Main] Cannot restart elevated: application path is empty.");
+                    onRestartFailed?.Invoke();
                     return;
                 }
 
@@ -473,20 +639,18 @@ namespace BigPictureManager
                     Verb = "runas",
                 };
                 Process.Start(psi);
-                BpmLog.WriteLine("[Startup] Restarting elevated to create the scheduled startup task.");
+                BpmLog.WriteLine(logMessage);
                 Exit(this, EventArgs.Empty);
             }
             catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
             {
-                BpmLog.WriteLine("[Startup] UAC prompt dismissed; scheduled startup task was not created.");
-                ClearPendingStartupTaskInstall();
-                _launchOnStartMenuItem.Checked = false;
+                BpmLog.WriteLine("[Main] UAC prompt dismissed; elevated restart was not performed.");
+                onUacCancelled?.Invoke();
             }
             catch (Exception ex)
             {
-                BpmLog.WriteLine("[Error] [Startup] Failed to restart elevated: " + ex.Message);
-                ClearPendingStartupTaskInstall();
-                _launchOnStartMenuItem.Checked = false;
+                BpmLog.WriteLine("[Error] [Main] Failed to restart elevated: " + ex.Message);
+                onRestartFailed?.Invoke();
                 MessageBox.Show(
                     "Could not restart as administrator: " + ex.Message,
                     AppName,

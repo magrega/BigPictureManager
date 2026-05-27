@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace BigPictureManager
@@ -15,17 +14,13 @@ namespace BigPictureManager
 
         public static bool IsRegistered()
         {
-            var exitCode = RunSchTasks("/Query /TN \"" + TaskName + "\"", out var output, out var error);
+            var exitCode = RunSchTasks("/Query /TN \"" + TaskName + "\"", out _, out _);
             var exists = exitCode == 0;
             BpmLog.WriteLine(
                 exists
                     ? "[Startup] Scheduled task \"" + TaskName + "\" is registered."
                     : "[Startup] Scheduled task \"" + TaskName + "\" is not registered."
             );
-            if (!exists && !string.IsNullOrWhiteSpace(error))
-            {
-                BpmLog.WriteLine("[Startup] Task query: " + error.Trim());
-            }
 
             return exists;
         }
@@ -47,19 +42,14 @@ namespace BigPictureManager
                 "[Startup] Creating scheduled task \"" + TaskName + "\" (ONLOGON, highest privileges) for: " + exePath
             );
 
-            var exitCode = RunSchTasks(args, out var output, out var error);
+            var exitCode = RunSchTasks(args, out _, out _);
             if (exitCode == 0)
             {
                 BpmLog.WriteLine("[Startup] Scheduled task \"" + TaskName + "\" created successfully.");
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    BpmLog.WriteLine("[Startup] schtasks: " + output.Trim());
-                }
-
                 return true;
             }
 
-            errorMessage = FormatSchTasksFailure(exitCode, output, error);
+            errorMessage = DescribeSchTasksFailure("create", exitCode);
             BpmLog.WriteLine("[Error] [Startup] Failed to create scheduled task: " + errorMessage);
             return false;
         }
@@ -69,14 +59,14 @@ namespace BigPictureManager
             errorMessage = null;
             BpmLog.WriteLine("[Startup] Deleting scheduled task \"" + TaskName + "\".");
 
-            var exitCode = RunSchTasks("/Delete /TN \"" + TaskName + "\" /F", out var output, out var error);
+            var exitCode = RunSchTasks("/Delete /TN \"" + TaskName + "\" /F", out _, out _);
             if (exitCode == 0)
             {
                 BpmLog.WriteLine("[Startup] Scheduled task \"" + TaskName + "\" deleted successfully.");
                 return true;
             }
 
-            errorMessage = FormatSchTasksFailure(exitCode, output, error);
+            errorMessage = DescribeSchTasksFailure("delete", exitCode);
             BpmLog.WriteLine("[Error] [Startup] Failed to delete scheduled task: " + errorMessage);
             return false;
         }
@@ -107,16 +97,32 @@ namespace BigPictureManager
             }
         }
 
-        private static string FormatSchTasksFailure(int exitCode, string output, string error)
+        private static string DescribeSchTasksFailure(string operation, int exitCode)
         {
-            var message = string.IsNullOrWhiteSpace(error) ? output : error;
-            message = message?.Trim();
-            if (string.IsNullOrWhiteSpace(message))
+            if (operation == "create")
             {
-                return "schtasks exited with code " + exitCode;
+                if (exitCode == 1)
+                {
+                    return "Could not create the scheduled task. Administrator rights are required.";
+                }
+
+                return "Could not create the scheduled task \""
+                    + TaskName
+                    + "\" (schtasks exit code "
+                    + exitCode
+                    + ").";
             }
 
-            return message;
+            if (exitCode == 1)
+            {
+                return "Could not delete the scheduled task. Administrator rights may be required, or the task may already be removed.";
+            }
+
+            return "Could not delete the scheduled task \""
+                + TaskName
+                + "\" (schtasks exit code "
+                + exitCode
+                + ").";
         }
 
         private static int RunSchTasks(string arguments, out string standardOutput, out string standardError)
@@ -133,41 +139,19 @@ namespace BigPictureManager
 
             using (var process = Process.Start(psi))
             {
-                var encoding = GetConsoleOutputEncoding();
-                standardOutput = ReadAllText(process.StandardOutput.BaseStream, encoding);
-                standardError = ReadAllText(process.StandardError.BaseStream, encoding);
+                standardOutput = ReadAllText(process.StandardOutput.BaseStream);
+                standardError = ReadAllText(process.StandardError.BaseStream);
                 process.WaitForExit();
                 return process.ExitCode;
             }
         }
 
-        private static string ReadAllText(Stream stream, Encoding encoding)
+        private static string ReadAllText(Stream stream)
         {
-            using (var reader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: false))
+            using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
             {
                 return reader.ReadToEnd();
             }
         }
-
-        private static Encoding GetConsoleOutputEncoding()
-        {
-            try
-            {
-                var codePage = GetConsoleOutputCP();
-                if (codePage != 0)
-                {
-                    return Encoding.GetEncoding((int)codePage);
-                }
-            }
-            catch
-            {
-                // fall through
-            }
-
-            return Encoding.Default;
-        }
-
-        [DllImport("kernel32.dll")]
-        private static extern uint GetConsoleOutputCP();
     }
 }
