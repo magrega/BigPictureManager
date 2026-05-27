@@ -74,18 +74,3 @@ namespace BigPictureManager
     }
 }
 
-namespace TinyScreen.Services
-{
-    internal sealed class BpmNightLightLogger : INightLightLogger
-    {
-        public void Info(string message)
-        {
-            BigPictureManager.BpmLog.WriteLine(message);
-        }
-
-        public void Error(string message)
-        {
-            BigPictureManager.BpmLog.WriteLine(message);
-        }
-    }
-}

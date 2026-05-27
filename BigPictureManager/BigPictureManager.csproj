@@ -90,12 +90,21 @@
     <Reference Include="UIAutomationTypes" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AppConstants.cs" />
+    <Compile Include="BigPictureTray.Audio.cs" />
+    <Compile Include="BigPictureTray.BigPictureSession.cs" />
+    <Compile Include="BigPictureTray.Bluetooth.cs" />
+    <Compile Include="BigPictureTray.cs" />
+    <Compile Include="BigPictureTray.Startup.cs" />
+    <Compile Include="BigPictureTray.XboxGip.cs" />
     <Compile Include="BpmLog.cs" />
     <Compile Include="ElevatedLogonStartupTask.cs" />
+    <Compile Include="ElevatedProcessLauncher.cs" />
     <Compile Include="NativeAudioApi.cs" />
-    <Compile Include="XboxGipPowerOff.cs" />
     <Compile Include="NightLight.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="WindowsIdentityHelper.cs" />
+    <Compile Include="XboxGipPowerOff.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

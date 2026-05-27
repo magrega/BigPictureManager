@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Win32;
 
-namespace TinyScreen.Services
+namespace BigPictureManager
 {
-    public sealed class NightLight : IDisposable
+    internal sealed class NightLight : IDisposable
     {
         private readonly INightLightLogger _logger;
         private readonly NightLightRegistryStore _registry;
@@ -788,5 +788,18 @@ namespace TinyScreen.Services
         ScheduleOff,
         ManualOnUnknownShape,
         ScheduleOnUnknownShape
+    }
+
+    internal sealed class BpmNightLightLogger : INightLightLogger
+    {
+        public void Info(string message)
+        {
+            BpmLog.WriteLine(message);
+        }
+
+        public void Error(string message)
+        {
+            BpmLog.WriteLine(message);
+        }
     }
 }

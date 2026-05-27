@@ -10,7 +10,7 @@ namespace BigPictureManager
     /// <summary>
     /// Audio API for enumerating/switching active playback devices.
     /// </summary>
-    public static class NativeAudioApi
+    internal static class NativeAudioApi
     {
         #region COM Interfaces for default device switching
         [Guid("f8679f50-850a-41cf-9c72-430f290290c8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -30,7 +30,7 @@ namespace BigPictureManager
         }
         #endregion
 
-        public class AudioDevice
+        internal class AudioDevice
         {
             public string Id { get; set; }
             public string Name { get; set; }
