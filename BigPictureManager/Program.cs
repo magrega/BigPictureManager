@@ -62,6 +62,7 @@ namespace BigPictureManager
         private bool restoreNightLightAfterBigPicture;
         private ToolStripMenuItem XboxGipPowerOffMenuItem;
         private ToolStripMenuItem NightLightBpMenuItem;
+        private ToolStripMenuItem _launchOnStartMenuItem;
         private readonly object _xboxGipIdsSync = new object();
         private List<ulong> _xboxGipDeviceIdsFromLastBpOpen;
         private readonly NightLight NightLight = new NightLight();
@@ -81,6 +82,14 @@ namespace BigPictureManager
             InitializeAsync();
             StartAudioDeviceMonitoring();
             ListenForBP();
+            var exePath = Application.ExecutablePath;
+            if (!string.IsNullOrEmpty(exePath))
+            {
+                ElevatedLogonStartupTask.RemoveLegacyStartupShortcut(exePath);
+            }
+
+            SyncLaunchOnStartMenuState();
+            TryCompletePendingElevatedStartupTaskInstall();
             LogApplicationStartup();
         }
 
@@ -178,7 +187,6 @@ namespace BigPictureManager
             {
                 if (!IsAdministrator())
                 {
-                    TryRestartElevatedForXboxGipFeature();
                     return;
                 }
 
@@ -204,18 +212,14 @@ namespace BigPictureManager
             powerOffControllerMenuItem.DropDownItems.Add(BTMenuItem);
             powerOffControllerMenuItem.DropDownItems.Add(XboxGipPowerOffMenuItem);
 
-            var StartMenuItem = new ToolStripMenuItem("Launch on system start")
+            _launchOnStartMenuItem = new ToolStripMenuItem("Launch on system start")
             {
                 CheckOnClick = true,
                 Checked = isAutoStart,
+                ToolTipText =
+                    "Run Big Picture Manager at sign-in with administrator rights (required for Xbox controller power-off)",
             };
-            StartMenuItem.Click += (s, e) =>
-            {
-                isAutoStart = StartMenuItem.Checked;
-                Settings.Default.isAutoStart = isAutoStart;
-                Settings.Default.Save();
-                SetStartup(StartMenuItem.Checked);
-            };
+            _launchOnStartMenuItem.Click += OnLaunchOnStartMenuItemClick;
 
             var aboutMenuItem = new ToolStripMenuItem("About");
             aboutMenuItem.Click += (s, e) =>
@@ -239,7 +243,7 @@ namespace BigPictureManager
                     SeparatorMenuItem,
                     NightLightBpMenuItem,
                     powerOffControllerMenuItem,
-                    StartMenuItem,
+                    _launchOnStartMenuItem,
                     aboutMenuItem,
                     ExitMenuItem,
                 }
@@ -281,30 +285,183 @@ namespace BigPictureManager
             }
             else
             {
-                XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller (admin rights)";
-                XboxGipPowerOffMenuItem.Enabled = true;
+                XboxGipPowerOffMenuItem.Text = "Wireless Xbox Controller";
+                XboxGipPowerOffMenuItem.Enabled = false;
                 XboxGipPowerOffMenuItem.CheckOnClick = false;
                 XboxGipPowerOffMenuItem.Checked = false;
                 XboxGipPowerOffMenuItem.ToolTipText =
-                    "Restart this app as administrator to enable wireless Xbox controller power-off when Big Picture closes";
+                    "Enable \"Launch on system start\" to run with administrator rights, then turn on Xbox controller power-off";
             }
         }
 
         private const int ErrorCancelled = 1223;
 
-        private void TryRestartElevatedForXboxGipFeature()
+        private void SyncLaunchOnStartMenuState()
+        {
+            isAutoStart = ElevatedLogonStartupTask.IsRegistered();
+            if (_launchOnStartMenuItem != null)
+            {
+                _launchOnStartMenuItem.Checked = isAutoStart;
+            }
+
+            if (Settings.Default.isAutoStart != isAutoStart)
+            {
+                Settings.Default.isAutoStart = isAutoStart;
+                Settings.Default.Save();
+            }
+        }
+
+        private void OnLaunchOnStartMenuItemClick(object sender, EventArgs e)
+        {
+            if (_launchOnStartMenuItem.Checked)
+            {
+                var exePath = Application.ExecutablePath;
+                if (string.IsNullOrEmpty(exePath))
+                {
+                    _launchOnStartMenuItem.Checked = false;
+                    MessageBox.Show(
+                        "Could not determine the application path.",
+                        AppName,
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                    return;
+                }
+
+                if (IsAdministrator())
+                {
+                    if (!ElevatedLogonStartupTask.TryRegister(exePath, out var registerError))
+                    {
+                        _launchOnStartMenuItem.Checked = false;
+                        MessageBox.Show(
+                            "Could not create the startup task:\n" + registerError,
+                            AppName,
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        );
+                        return;
+                    }
+
+                    CompleteStartupTaskInstallSuccess();
+                    return;
+                }
+
+                Settings.Default.pendingInstallElevatedStartupTask = true;
+                Settings.Default.Save();
+                BpmLog.WriteLine("[Startup] Launch on system start enabled; requesting elevated restart to create the scheduled task.");
+                RestartElevatedForStartupTask();
+                return;
+            }
+
+            ClearPendingStartupTaskInstall();
+
+            if (!ElevatedLogonStartupTask.TryUnregister(out var unregisterError))
+            {
+                _launchOnStartMenuItem.Checked = true;
+                MessageBox.Show(
+                    "Could not remove the startup task:\n" + unregisterError,
+                    AppName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return;
+            }
+
+            isAutoStart = false;
+            Settings.Default.isAutoStart = false;
+            Settings.Default.Save();
+        }
+
+        private void TryCompletePendingElevatedStartupTaskInstall()
+        {
+            if (!Settings.Default.pendingInstallElevatedStartupTask)
+            {
+                return;
+            }
+
+            if (!IsAdministrator())
+            {
+                BpmLog.WriteLine(
+                    "[Startup] Pending scheduled-task install was not completed (application is not elevated)."
+                );
+                ClearPendingStartupTaskInstall();
+                if (_launchOnStartMenuItem != null)
+                {
+                    _launchOnStartMenuItem.Checked = false;
+                }
+
+                return;
+            }
+
+            var exePath = Application.ExecutablePath;
+            if (string.IsNullOrEmpty(exePath))
+            {
+                BpmLog.WriteLine("[Error] [Startup] Pending scheduled-task install failed: application path is empty.");
+                ClearPendingStartupTaskInstall();
+                if (_launchOnStartMenuItem != null)
+                {
+                    _launchOnStartMenuItem.Checked = false;
+                }
+
+                return;
+            }
+
+            BpmLog.WriteLine("[Startup] Completing pending scheduled-task install (elevated).");
+            if (!ElevatedLogonStartupTask.TryRegister(exePath, out var registerError))
+            {
+                ClearPendingStartupTaskInstall();
+                if (_launchOnStartMenuItem != null)
+                {
+                    _launchOnStartMenuItem.Checked = false;
+                }
+
+                MessageBox.Show(
+                    "Could not create the startup task:\n" + registerError,
+                    AppName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return;
+            }
+
+            CompleteStartupTaskInstallSuccess();
+        }
+
+        private void CompleteStartupTaskInstallSuccess()
+        {
+            ClearPendingStartupTaskInstall();
+            isAutoStart = true;
+            Settings.Default.isAutoStart = true;
+            Settings.Default.Save();
+            if (_launchOnStartMenuItem != null)
+            {
+                _launchOnStartMenuItem.Checked = true;
+            }
+
+            BpmLog.WriteLine("[Startup] Launch on system start is enabled.");
+        }
+
+        private static void ClearPendingStartupTaskInstall()
+        {
+            if (!Settings.Default.pendingInstallElevatedStartupTask)
+            {
+                return;
+            }
+
+            Settings.Default.pendingInstallElevatedStartupTask = false;
+            Settings.Default.Save();
+        }
+
+        private void RestartElevatedForStartupTask()
         {
             try
             {
                 var exePath = Application.ExecutablePath;
                 if (string.IsNullOrEmpty(exePath))
                 {
-                    MessageBox.Show(
-                        "Could not determine the application path to restart elevated.",
-                        AppName,
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
+                    BpmLog.WriteLine("[Error] [Startup] Cannot restart elevated: application path is empty.");
+                    ClearPendingStartupTaskInstall();
+                    _launchOnStartMenuItem.Checked = false;
                     return;
                 }
 
@@ -316,18 +473,20 @@ namespace BigPictureManager
                     Verb = "runas",
                 };
                 Process.Start(psi);
-                Settings.Default.isPowerOffXboxGipOnBpClose = true;
-                Settings.Default.Save();
-                BpmLog.WriteLine("[Main] Restarting elevated after UAC for Xbox GIP feature (Xbox power-off enabled in settings).");
+                BpmLog.WriteLine("[Startup] Restarting elevated to create the scheduled startup task.");
                 Exit(this, EventArgs.Empty);
             }
             catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
             {
-                BpmLog.WriteLine("[Main] UAC prompt dismissed; staying non-elevated.");
+                BpmLog.WriteLine("[Startup] UAC prompt dismissed; scheduled startup task was not created.");
+                ClearPendingStartupTaskInstall();
+                _launchOnStartMenuItem.Checked = false;
             }
             catch (Exception ex)
             {
-                BpmLog.WriteLine("[Error] [Main] Failed to restart elevated: " + ex.Message);
+                BpmLog.WriteLine("[Error] [Startup] Failed to restart elevated: " + ex.Message);
+                ClearPendingStartupTaskInstall();
+                _launchOnStartMenuItem.Checked = false;
                 MessageBox.Show(
                     "Could not restart as administrator: " + ex.Message,
                     AppName,
@@ -457,41 +616,6 @@ namespace BigPictureManager
                 SetDefaultAudio(menu, audioListItems);
             }
             return menu;
-        }
-
-        private void SetStartup(bool enable)
-        {
-            try
-            {
-                string appPath = Application.ExecutablePath;
-                string startupPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
-                string shortcutPath = Path.Combine(
-                    startupPath,
-                    Path.GetFileNameWithoutExtension(appPath) + ".lnk"
-                );
-
-                if (enable)
-                {
-                    var shell = new IWshRuntimeLibrary.WshShell();
-                    IWshRuntimeLibrary.IWshShortcut shortcut = (IWshRuntimeLibrary.IWshShortcut)
-                        shell.CreateShortcut(shortcutPath);
-
-                    shortcut.TargetPath = appPath;
-                    shortcut.WorkingDirectory = Path.GetDirectoryName(appPath);
-                    shortcut.Description = AppName;
-                    shortcut.IconLocation = appPath + ",0";
-                    shortcut.Save();
-                }
-                else
-                {
-                    if (File.Exists(shortcutPath))
-                        File.Delete(shortcutPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error setting startup: {ex.Message}");
-            }
         }
 
         private async Task<Radio> RequestBluetoothDevice()
@@ -665,7 +789,7 @@ namespace BigPictureManager
             else if (Settings.Default.isPowerOffXboxGipOnBpClose)
             {
                 BpmLog.WriteLine(
-                    "[Xbox] Power-off after Big Picture exit skipped (restart the app as administrator to enable this feature)."
+                    "[Xbox] Power-off after Big Picture exit skipped (application is not running with administrator rights)."
                 );
             }
         }

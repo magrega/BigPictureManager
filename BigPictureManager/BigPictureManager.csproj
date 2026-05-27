@@ -91,6 +91,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BpmLog.cs" />
+    <Compile Include="ElevatedLogonStartupTask.cs" />
     <Compile Include="NativeAudioApi.cs" />
     <Compile Include="XboxGipPowerOff.cs" />
     <Compile Include="NightLight.cs" />
@@ -151,17 +152,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\bpman3.ico" />
-  </ItemGroup>
-  <ItemGroup>
-    <COMReference Include="IWshRuntimeLibrary">
-      <Guid>{F935DC20-1CF0-11D0-ADB9-00C04FD58A0B}</Guid>
-      <VersionMajor>1</VersionMajor>
-      <VersionMinor>0</VersionMinor>
-      <Lcid>0</Lcid>
-      <WrapperTool>tlbimp</WrapperTool>
-      <Isolated>False</Isolated>
-      <EmbedInteropTypes>True</EmbedInteropTypes>
-    </COMReference>
   </ItemGroup>
   <ItemGroup>
     <Content Include="bpman3.ico" />

@@ -62,6 +62,18 @@ namespace BigPictureManager.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool pendingInstallElevatedStartupTask {
+            get {
+                return ((bool)(this["pendingInstallElevatedStartupTask"]));
+            }
+            set {
+                this["pendingInstallElevatedStartupTask"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool isPowerOffXboxGipOnBpClose {
             get {
                 return ((bool)(this["isPowerOffXboxGipOnBpClose"]));

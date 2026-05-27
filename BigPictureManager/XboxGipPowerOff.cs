@@ -181,6 +181,21 @@ namespace BigPictureManager
             _serviceTargetIndex = targetIndex;
             _serviceExplicitDeviceIds = explicitDeviceIds;
 
+            if (explicitDeviceIds != null && explicitDeviceIds.Count > 0)
+            {
+                BpmLog.WriteLine(
+                    "[Xbox] Ephemeral service worker started (explicit device id count: " + explicitDeviceIds.Count + ")."
+                );
+            }
+            else if (targetIndex >= 0)
+            {
+                BpmLog.WriteLine("[Xbox] Ephemeral service worker started (target index: " + targetIndex + ").");
+            }
+            else
+            {
+                BpmLog.WriteLine("[Xbox] Ephemeral service worker started (discover all controllers).");
+            }
+
             var entry0 = new ServiceTableEntry { lpServiceName = ServiceName, lpServiceProc = ServiceMainPtr };
             var entry1 = new ServiceTableEntry { lpServiceName = null, lpServiceProc = IntPtr.Zero };
 
@@ -227,8 +242,14 @@ namespace BigPictureManager
             _serviceStatusHandle = RegisterServiceCtrlHandler(ServiceName, ServiceControlHandlerDelegate);
             if (_serviceStatusHandle == IntPtr.Zero)
             {
+                BpmLog.WriteLine(
+                    "[Error] [Xbox] Ephemeral service failed to register control handler: Win32 "
+                        + Marshal.GetLastWin32Error()
+                );
                 return;
             }
+
+            BpmLog.WriteLine("[Xbox] Ephemeral service \"" + ServiceName + "\" entered RUNNING state.");
 
             _serviceStatus = new ServiceStatus
             {
@@ -250,6 +271,7 @@ namespace BigPictureManager
             {
                 _serviceStatus.dwCurrentState = ServiceStopped;
                 SetServiceStatus(_serviceStatusHandle, ref _serviceStatus);
+                BpmLog.WriteLine("[Xbox] Ephemeral service \"" + ServiceName + "\" stopped.");
             }
         }
 
@@ -295,10 +317,15 @@ namespace BigPictureManager
                 binPath = $"\"{exePath}\" {ServiceArgFlag}";
             }
 
+            BpmLog.WriteLine("[Xbox] Creating ephemeral Windows service \"" + ServiceName + "\".");
+            BpmLog.WriteLine("[Xbox] Service binary path: " + binPath);
+
             var scm = OpenSCManager(null, null, ScManagerCreateService);
             if (scm == IntPtr.Zero)
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
+                var err = Marshal.GetLastWin32Error();
+                BpmLog.WriteLine("[Error] [Xbox] OpenSCManager failed: Win32 " + err);
+                throw new Win32Exception(err);
             }
 
             try
@@ -324,13 +351,17 @@ namespace BigPictureManager
                     var err = Marshal.GetLastWin32Error();
                     if (err != ErrorServiceExists)
                     {
+                        BpmLog.WriteLine("[Error] [Xbox] CreateService failed: Win32 " + err);
                         throw new Win32Exception(err);
                     }
 
+                    BpmLog.WriteLine("[Xbox] Service \"" + ServiceName + "\" already exists; opening and updating configuration.");
                     svc = OpenService(scm, ServiceName, ServiceAllAccess);
                     if (svc == IntPtr.Zero)
                     {
-                        throw new Win32Exception(Marshal.GetLastWin32Error());
+                        err = Marshal.GetLastWin32Error();
+                        BpmLog.WriteLine("[Error] [Xbox] OpenService failed: Win32 " + err);
+                        throw new Win32Exception(err);
                     }
 
                     if (
@@ -349,26 +380,51 @@ namespace BigPictureManager
                         )
                     )
                     {
+                        err = Marshal.GetLastWin32Error();
+                        BpmLog.WriteLine("[Error] [Xbox] ChangeServiceConfig failed: Win32 " + err);
                         CloseServiceHandle(svc);
-                        throw new Win32Exception(Marshal.GetLastWin32Error());
+                        throw new Win32Exception(err);
                     }
+
+                    BpmLog.WriteLine("[Xbox] Existing service configuration updated.");
+                }
+                else
+                {
+                    BpmLog.WriteLine("[Xbox] Ephemeral service \"" + ServiceName + "\" created successfully.");
                 }
 
                 try
                 {
+                    BpmLog.WriteLine("[Xbox] Starting ephemeral service \"" + ServiceName + "\".");
                     if (!StartService(svc, 0, IntPtr.Zero))
                     {
                         var err = Marshal.GetLastWin32Error();
                         if (err != 1056)
                         {
-                            // ERROR_SERVICE_ALREADY_RUNNING — still wait for work to finish
+                            BpmLog.WriteLine("[Error] [Xbox] StartService failed: Win32 " + err);
                             throw new Win32Exception(err);
                         }
+
+                        BpmLog.WriteLine("[Xbox] Service was already running; waiting for power-off to complete.");
+                    }
+                    else
+                    {
+                        BpmLog.WriteLine("[Xbox] StartService succeeded.");
                     }
 
                     Thread.Sleep(3000);
 
-                    DeleteService(svc);
+                    BpmLog.WriteLine("[Xbox] Deleting ephemeral service \"" + ServiceName + "\".");
+                    if (!DeleteService(svc))
+                    {
+                        BpmLog.WriteLine(
+                            "[Error] [Xbox] DeleteService failed: Win32 " + Marshal.GetLastWin32Error()
+                        );
+                    }
+                    else
+                    {
+                        BpmLog.WriteLine("[Xbox] Ephemeral service \"" + ServiceName + "\" deleted successfully.");
+                    }
                 }
                 finally
                 {
@@ -578,6 +634,14 @@ namespace BigPictureManager
 
             if (ha == new IntPtr(-1) || ha == IntPtr.Zero)
             {
+                BpmLog.WriteLine(
+                    "[Error] [Xbox] Could not open "
+                        + GipAdminDevicePath
+                        + " for device "
+                        + deviceId.ToString("X16", CultureInfo.InvariantCulture)
+                        + ": Win32 "
+                        + Marshal.GetLastWin32Error()
+                );
                 return false;
             }
 
@@ -591,7 +655,7 @@ namespace BigPictureManager
                 try
                 {
                     uint bytesRet = 0;
-                    return DeviceIoControl(
+                    var ok = DeviceIoControl(
                         ha,
                         GipControlDevice,
                         pin.AddrOfPinnedObject(),
@@ -601,6 +665,25 @@ namespace BigPictureManager
                         out bytesRet,
                         IntPtr.Zero
                     );
+                    if (ok)
+                    {
+                        BpmLog.WriteLine(
+                            "[Xbox] Power-off IOCTL succeeded for device "
+                                + deviceId.ToString("X16", CultureInfo.InvariantCulture)
+                                + "."
+                        );
+                    }
+                    else
+                    {
+                        BpmLog.WriteLine(
+                            "[Error] [Xbox] Power-off IOCTL failed for device "
+                                + deviceId.ToString("X16", CultureInfo.InvariantCulture)
+                                + ": Win32 "
+                                + Marshal.GetLastWin32Error()
+                        );
+                    }
+
+                    return ok;
                 }
                 finally
                 {
