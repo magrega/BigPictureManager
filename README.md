@@ -14,7 +14,7 @@ TO-DO:
 7. ~~Check for a TV audio device to preset~~
 8. ~~Save app state~~
 9. ~~Turn Night Light off when BP starts~~
-10. ~~Turn off Wireless Xbox controller (the way's a bit hacky, might break in the future)~~
+10. ~~Turn off Wireless Xbox controller (hacky, might break in the future)~~
 11. ~~Pause music when BP starts?~~
 12. Adapt UI for 2K+ screens
 13. ~~Set autostart as admin~~
