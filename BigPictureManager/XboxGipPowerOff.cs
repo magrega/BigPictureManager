@@ -26,6 +26,20 @@ namespace BigPictureManager
         private const uint GipControlDevice = 0x40001C4C;
         private const byte SubcmdTurnOff = 2;
 
+        /// <summary>Guide-button LED intensity for ~10% (5 of 47).</summary>
+        internal const byte LedIntensityPercent10 = 0x05;
+
+        /// <summary>Guide-button LED intensity for 100% (47 of 47).</summary>
+        internal const byte LedIntensityPercent100 = 0x2F;
+
+        private const int LedCommandLength = 23;
+
+        // Bytes 8..21 of the GIP LED command (command 0x0A); byte 22 is intensity.
+        private static readonly byte[] LedCommandBody =
+        {
+            0x0A, 0x20, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        };
+
         private const int MaxControllers = 8;
         private const int MaxReadAttempts = 16;
         private const uint GenericReadWrite = 0xC0000000;
@@ -113,6 +127,103 @@ namespace BigPictureManager
             var ids = new List<ulong>(MaxControllers);
             DiscoverDevices(ids, MaxControllers);
             return ids;
+        }
+
+        /// <summary>
+        /// Sets guide-button LED brightness for one controller via \\.\XboxGIP (no admin required).
+        /// </summary>
+        internal static bool TrySetLedBrightness(ulong deviceId, byte intensity)
+        {
+            var h = CreateFile(
+                GipDevicePath,
+                GenericReadWrite,
+                FileShareReadWrite,
+                IntPtr.Zero,
+                OpenExisting,
+                FileAttributeNormal,
+                IntPtr.Zero
+            );
+
+            if (h == new IntPtr(-1) || h == IntPtr.Zero)
+            {
+                BpmLog.WriteLine(
+                    "[Xbox] Could not open "
+                        + GipDevicePath
+                        + " for LED control (device "
+                        + deviceId.ToString("X16", CultureInfo.InvariantCulture)
+                        + "): Win32 "
+                        + Marshal.GetLastWin32Error()
+                );
+                return false;
+            }
+
+            try
+            {
+                var command = BuildLedCommand(deviceId, intensity);
+                var pin = GCHandle.Alloc(command, GCHandleType.Pinned);
+                try
+                {
+                    uint bytesWritten;
+                    var ok = WriteFile(
+                        h,
+                        pin.AddrOfPinnedObject(),
+                        (uint)command.Length,
+                        out bytesWritten,
+                        IntPtr.Zero
+                    );
+                    if (ok && bytesWritten == command.Length)
+                    {
+                        BpmLog.WriteLine(
+                            "[Xbox] LED brightness set to "
+                                + intensity
+                                + " for device "
+                                + deviceId.ToString("X16", CultureInfo.InvariantCulture)
+                                + "."
+                        );
+                    }
+                    else
+                    {
+                        BpmLog.WriteLine(
+                            "[Error] [Xbox] LED brightness write failed for device "
+                                + deviceId.ToString("X16", CultureInfo.InvariantCulture)
+                                + ": Win32 "
+                                + Marshal.GetLastWin32Error()
+                        );
+                    }
+
+                    return ok && bytesWritten == command.Length;
+                }
+                finally
+                {
+                    pin.Free();
+                }
+            }
+            finally
+            {
+                CloseHandle(h);
+            }
+        }
+
+        internal static void TrySetLedBrightnessForAll(IReadOnlyList<ulong> deviceIds, byte intensity)
+        {
+            if (deviceIds == null || deviceIds.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var id in deviceIds)
+            {
+                TrySetLedBrightness(id, intensity);
+            }
+        }
+
+        private static byte[] BuildLedCommand(ulong deviceId, byte intensity)
+        {
+            var command = new byte[LedCommandLength];
+            BitConverter.GetBytes(deviceId).CopyTo(command, 0);
+            LedCommandBody.CopyTo(command, 8);
+            command[LedCommandLength - 1] = intensity;
+            return command;
         }
 
         internal static bool TryParseServiceArgs(string[] args, out int targetIndex, out List<ulong> explicitDeviceIds)
@@ -775,6 +886,15 @@ namespace BigPictureManager
             IntPtr lpOutBuffer,
             uint nOutBufferSize,
             out uint lpBytesReturned,
+            IntPtr lpOverlapped
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool WriteFile(
+            IntPtr hFile,
+            IntPtr lpBuffer,
+            uint nNumberOfBytesToWrite,
+            out uint lpNumberOfBytesWritten,
             IntPtr lpOverlapped
         );
 

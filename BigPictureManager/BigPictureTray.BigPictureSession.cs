@@ -65,10 +65,7 @@ namespace BigPictureManager
                 null
             );
 
-            if (WindowsIdentityHelper.IsAdministrator() && Settings.Default.isPowerOffXboxGipOnBpClose)
-            {
-                DiscoverXboxGipControllersForCurrentBpSession();
-            }
+            DiscoverXboxGipControllersForCurrentBpSession();
 
             _targetWindow = sender as AutomationElement;
             Automation.AddAutomationEventHandler(
@@ -148,11 +145,19 @@ namespace BigPictureManager
             {
                 _ = Task.Run(() => PowerOffXboxControllersAfterBigPictureExit(xboxGipSnapshot));
             }
-            else if (Settings.Default.isPowerOffXboxGipOnBpClose)
+            else
             {
-                BpmLog.WriteLine(
-                    "[Xbox] Power-off after Big Picture exit skipped (application is not running with administrator rights)."
-                );
+                if (Settings.Default.isPowerOffXboxGipOnBpClose)
+                {
+                    BpmLog.WriteLine(
+                        "[Xbox] Power-off after Big Picture exit skipped (application is not running with administrator rights)."
+                    );
+                }
+
+                if (xboxGipSnapshot != null && xboxGipSnapshot.Count > 0)
+                {
+                    _ = Task.Run(() => RestoreXboxControllerLedAfterBigPictureExit(xboxGipSnapshot));
+                }
             }
         }
 
@@ -183,8 +188,25 @@ namespace BigPictureManager
             }
         }
 
+        private static void RestoreXboxControllerLedAfterBigPictureExit(List<ulong> xboxGipSnapshot)
+        {
+            try
+            {
+                BpmLog.WriteLine(
+                    "[Xbox] Restoring guide-button LED to 100% for "
+                        + xboxGipSnapshot.Count
+                        + " cached controller id(s) after Big Picture exit."
+                );
+                XboxGipPowerOff.TrySetLedBrightnessForAll(xboxGipSnapshot, XboxGipPowerOff.LedIntensityPercent100);
+            }
+            catch (Exception ex)
+            {
+                BpmLog.WriteLine("[Error] [Xbox] LED restore after Big Picture exit failed: " + ex.Message);
+            }
+        }
+
         /// <summary>
-        /// Discovers Xbox GIP controller IDs when Big Picture opens so shutdown can skip discovery in the elevated service.
+        /// Discovers Xbox GIP controller IDs when Big Picture opens, dims the guide LED, and caches IDs for exit handling.
         /// </summary>
         private void DiscoverXboxGipControllersForCurrentBpSession()
         {
@@ -203,11 +225,13 @@ namespace BigPictureManager
                         BpmLog.WriteLine(
                             "[Xbox] Cached " + ids.Count + " controller id(s) for this Big Picture session."
                         );
+                        BpmLog.WriteLine("[Xbox] Dimming guide-button LED to ~10% for Big Picture session.");
+                        XboxGipPowerOff.TrySetLedBrightnessForAll(ids, XboxGipPowerOff.LedIntensityPercent10);
                     }
                     else
                     {
                         BpmLog.WriteLine(
-                            "[Xbox] No controllers at Big Picture start (exit will use in-service discovery if power-off is enabled)."
+                            "[Xbox] No controllers at Big Picture start (LED dim and exit actions skipped for this session)."
                         );
                     }
                 }
