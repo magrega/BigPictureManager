@@ -35,8 +35,9 @@ namespace BigPictureManager
                 return false;
             }
 
-            var tr = "\"" + exePath + "\"";
-            var args = "/Create /TN \"" + TaskName + "\" /TR " + tr + " /SC ONLOGON /RL HIGHEST /F";
+            string tr = $"\\\"{exePath}\\\"";
+            string args = $"/Create /TN \"{TaskName}\" /TR \"{tr}\" /SC ONLOGON /RL HIGHEST /F";
+
 
             BpmLog.WriteLine(
                 "[Startup] Creating scheduled task \"" + TaskName + "\" (ONLOGON, highest privileges) for: " + exePath
