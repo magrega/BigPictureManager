@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Security;
 using System.Text;
+using System.Threading;
 using BigPictureManager.Properties;
 using Microsoft.Win32;
 using Windows.Data.Xml.Dom;
@@ -53,13 +54,39 @@ namespace BigPictureManager
                 var document = new XmlDocument();
                 document.LoadXml(xml);
 
+                var toast = new ToastNotification(document)
+                {
+                    Tag = AppConstants.AlreadyRunningToastTag,
+                    Group = AppConstants.AlreadyRunningToastGroup,
+                };
+
                 var notifier = ToastNotificationManager.CreateToastNotifier(AppConstants.AppUserModelId);
-                notifier.Show(new ToastNotification(document));
+                notifier.Show(toast);
                 BpmLog.WriteLine("[Toast] Displayed \"already running\" notification.");
+
+                Thread.Sleep(AppConstants.AlreadyRunningToastVisibleMs);
+                RemoveAlreadyRunningToastFromHistory();
             }
             catch (Exception ex)
             {
                 BpmLog.WriteLine("[Error] [Toast] Failed to show notification: " + ex.Message);
+            }
+        }
+
+        private static void RemoveAlreadyRunningToastFromHistory()
+        {
+            try
+            {
+                ToastNotificationManager.History.Remove(
+                    AppConstants.AlreadyRunningToastTag,
+                    AppConstants.AlreadyRunningToastGroup,
+                    AppConstants.AppUserModelId
+                );
+                BpmLog.WriteLine("[Toast] Removed \"already running\" notification from Action Center history.");
+            }
+            catch (Exception ex)
+            {
+                BpmLog.WriteLine("[Error] [Toast] Failed to remove notification from history: " + ex.Message);
             }
         }
 

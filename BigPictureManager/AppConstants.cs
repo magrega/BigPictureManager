@@ -9,6 +9,12 @@ namespace BigPictureManager
 
         internal const string NotificationLogoFileName = "bpman3.png";
 
+        internal const string AlreadyRunningToastTag = "AlreadyRunning";
+
+        internal const string AlreadyRunningToastGroup = "SingleInstance";
+
+        internal const int AlreadyRunningToastVisibleMs = 3000;
+
         internal const string SingleInstanceMutexPrefix = @"Local\BigPictureManager-";
 
         internal const string BigPictureWindowName = "Steam Big Picture Mode";
