@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace BigPictureManager
@@ -22,9 +23,42 @@ namespace BigPictureManager
                 return;
             }
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new BigPictureTray());
+            var exePath = SingleInstanceApplication.GetExecutablePath();
+            Mutex singleInstanceMutex = null;
+            var ownsMutex = SingleInstanceApplication.TryAcquireMutex(out singleInstanceMutex, out var isFirstInstance);
+
+            if (ownsMutex && !isFirstInstance)
+            {
+                try
+                {
+                    AppNotificationSetup.EnsureRegistered(exePath);
+                    AppNotificationSetup.ShowAlreadyRunningToast();
+                    SingleInstanceApplication.TryActivateExistingInstance();
+                }
+                finally
+                {
+                    singleInstanceMutex?.Dispose();
+                }
+
+                return;
+            }
+
+            try
+            {
+                AppNotificationSetup.EnsureRegistered(exePath);
+
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Application.Run(new BigPictureTray());
+            }
+            finally
+            {
+                if (ownsMutex && isFirstInstance && singleInstanceMutex != null)
+                {
+                    singleInstanceMutex.ReleaseMutex();
+                    singleInstanceMutex.Dispose();
+                }
+            }
         }
     }
 }

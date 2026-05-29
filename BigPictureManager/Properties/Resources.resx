@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -160,8 +160,14 @@
   <data name="MenuWirelessXboxController" xml:space="preserve">
     <value>Wireless Xbox Controller</value>
   </data>
+  <data name="MsgAlreadyRunning" xml:space="preserve">
+    <value>Big Picture Manager is already running!</value>
+  </data>
   <data name="MsgCouldNotDetermineAppPath" xml:space="preserve">
     <value>Could not determine the application path.</value>
+  </data>
+  <data name="NotificationTitle" xml:space="preserve">
+    <value>Big Picture Manager</value>
   </data>
   <data name="MsgRestartAsAdminFailed" xml:space="preserve">
     <value>Could not restart as administrator: {0}</value>

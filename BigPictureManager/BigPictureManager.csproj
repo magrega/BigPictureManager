@@ -91,6 +91,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AppConstants.cs" />
+    <Compile Include="AppNotificationSetup.cs" />
     <Compile Include="BigPictureTray.Audio.cs" />
     <Compile Include="BigPictureTray.BigPictureSession.cs" />
     <Compile Include="BigPictureTray.Bluetooth.cs" />
@@ -101,8 +102,11 @@
     <Compile Include="ElevatedLogonStartupTask.cs" />
     <Compile Include="ElevatedProcessLauncher.cs" />
     <Compile Include="NativeAudioApi.cs" />
+    <Compile Include="NativeMethods.cs" />
     <Compile Include="NightLight.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ShellShortcutHelper.cs" />
+    <Compile Include="SingleInstanceApplication.cs" />
     <Compile Include="SystemMediaPause.cs" />
     <Compile Include="WindowsIdentityHelper.cs" />
     <Compile Include="XboxGipPowerOff.cs" />
@@ -165,6 +169,9 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="bpman3.ico" />
+    <Content Include="bpman3.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <WCFMetadata Include="Connected Services\" />
