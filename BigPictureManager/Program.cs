@@ -25,9 +25,11 @@ namespace BigPictureManager
 
             var exePath = SingleInstanceApplication.GetExecutablePath();
             Mutex singleInstanceMutex = null;
-            var ownsMutex = SingleInstanceApplication.TryAcquireMutex(out singleInstanceMutex, out var isFirstInstance);
+            var ownsMutex = SingleInstanceApplication.TryAcquireMutex(out singleInstanceMutex, out var isMutexFirst);
+            var isAnotherInstanceRunning = SingleInstanceApplication.IsAnotherInstanceRunningForCurrentUser();
+            var isDuplicateInstance = (ownsMutex && !isMutexFirst) || isAnotherInstanceRunning;
 
-            if (ownsMutex && !isFirstInstance)
+            if (isDuplicateInstance)
             {
                 try
                 {
@@ -53,7 +55,7 @@ namespace BigPictureManager
             }
             finally
             {
-                if (ownsMutex && isFirstInstance && singleInstanceMutex != null)
+                if (ownsMutex && isMutexFirst && singleInstanceMutex != null)
                 {
                     singleInstanceMutex.ReleaseMutex();
                     singleInstanceMutex.Dispose();
