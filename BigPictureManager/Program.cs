@@ -9,9 +9,11 @@ namespace BigPictureManager
         [STAThread]
         private static void Main(string[] args)
         {
+            args = args ?? Array.Empty<string>();
+
             if (
                 XboxGipPowerOff.TryParseServiceArgs(
-                    args ?? Array.Empty<string>(),
+                    args,
                     out var xboxPowerOffTargetIndex,
                     out var xboxExplicitDeviceIds,
                     out var xboxServiceLogDirectory
@@ -26,11 +28,24 @@ namespace BigPictureManager
                 return;
             }
 
+            // A deliberate elevated restart must take over from the instance that launched it, so it waits
+            // for that instance to exit and never treats itself as a duplicate.
+            var isElevatedRestart = Array.Exists(
+                args,
+                arg => string.Equals(arg, AppConstants.ElevatedRestartArg, StringComparison.OrdinalIgnoreCase)
+            );
+            if (isElevatedRestart)
+            {
+                BpmLog.WriteLine("[Main] Elevated restart launch; waiting for the previous instance to exit.");
+                SingleInstanceApplication.WaitForOtherInstancesToExit(TimeSpan.FromSeconds(5));
+            }
+
             var exePath = SingleInstanceApplication.GetExecutablePath();
             Mutex singleInstanceMutex = null;
             var ownsMutex = SingleInstanceApplication.TryAcquireMutex(out singleInstanceMutex, out var isMutexFirst);
             var isAnotherInstanceRunning = SingleInstanceApplication.IsAnotherInstanceRunningForCurrentUser();
-            var isDuplicateInstance = (ownsMutex && !isMutexFirst) || isAnotherInstanceRunning;
+            var isDuplicateInstance =
+                !isElevatedRestart && ((ownsMutex && !isMutexFirst) || isAnotherInstanceRunning);
 
             if (isDuplicateInstance)
             {

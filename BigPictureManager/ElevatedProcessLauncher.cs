@@ -29,6 +29,7 @@ namespace BigPictureManager
                 var psi = new ProcessStartInfo
                 {
                     FileName = exePath,
+                    Arguments = AppConstants.ElevatedRestartArg,
                     WorkingDirectory = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory,
                     UseShellExecute = true,
                     Verb = "runas",
