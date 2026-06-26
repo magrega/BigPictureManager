@@ -74,21 +74,21 @@ namespace BigPictureManager
         /// <summary>
         /// Returns only active playback devices.
         /// </summary>
-        public static List<AudioDevice> GetPlaybackDevices()
+        internal static List<AudioDevice> GetPlaybackDevices()
         {
             try
             {
                 return Enumerator
                     .EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-                    .Where(d => d != null && d.State == DeviceState.Active)
                     .Select(d => new AudioDevice { Id = d.ID, Name = d.FriendlyName })
                     .Where(d => !string.IsNullOrWhiteSpace(d.Id) && !string.IsNullOrWhiteSpace(d.Name))
                     .GroupBy(d => d.Id, StringComparer.OrdinalIgnoreCase)
                     .Select(g => g.First())
                     .ToList();
             }
-            catch
+            catch (Exception ex)
             {
+                BpmLog.WriteLine("[Error] [Audio] Could not enumerate playback devices: " + ex.Message);
                 return new List<AudioDevice>();
             }
         }
@@ -96,7 +96,7 @@ namespace BigPictureManager
         /// <summary>
         /// Set default playback device by ID for all three roles (Console, Multimedia, Communications).
         /// </summary>
-        public static bool SetDefaultDevice(string deviceId)
+        internal static bool SetDefaultDevice(string deviceId)
         {
             if (string.IsNullOrWhiteSpace(deviceId))
             {
@@ -185,7 +185,7 @@ namespace BigPictureManager
         /// <summary>
         /// Get current default playback device
         /// </summary>
-        public static AudioDevice GetDefaultDevice()
+        internal static AudioDevice GetDefaultDevice()
         {
             try
             {
@@ -195,11 +195,14 @@ namespace BigPictureManager
                     return new AudioDevice { Id = device.ID, Name = device.FriendlyName };
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                BpmLog.WriteLine("[Error] [Audio] Could not read current default device: " + ex.Message);
+            }
             return null;
         }
 
-        public static void StartDeviceWatcher(Action onDevicesChanged)
+        internal static void StartDeviceWatcher(Action onDevicesChanged)
         {
             lock (WatcherSync)
             {
@@ -212,7 +215,7 @@ namespace BigPictureManager
             }
         }
 
-        public static void StopDeviceWatcher()
+        internal static void StopDeviceWatcher()
         {
             lock (WatcherSync)
             {
@@ -237,6 +240,12 @@ namespace BigPictureManager
 
         private sealed class AudioDeviceNotificationClient : IMMNotificationClient
         {
+            // PKEY_Device_FriendlyName — the only property change worth a full menu rebuild. All other
+            // property changes (volume, format, etc.) fire constantly and would cause needless churn.
+            private static readonly Guid PkeyDeviceFriendlyNameFormatId =
+                new Guid("a45c254e-df1c-4efd-8020-67d146a850e0");
+            private const int PkeyDeviceFriendlyNamePropertyId = 14;
+
             private readonly Action _changed;
 
             public AudioDeviceNotificationClient(Action changed)
@@ -269,8 +278,11 @@ namespace BigPictureManager
 
             public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key)
             {
-                // FriendlyName or availability can change dynamically.
-                _changed?.Invoke();
+                if (key.formatId == PkeyDeviceFriendlyNameFormatId
+                    && key.propertyId == PkeyDeviceFriendlyNamePropertyId)
+                {
+                    _changed?.Invoke();
+                }
             }
         }
     }

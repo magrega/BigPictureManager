@@ -92,10 +92,12 @@
   <ItemGroup>
     <Compile Include="AppConstants.cs" />
     <Compile Include="AppNotificationSetup.cs" />
+    <Compile Include="AudioDeviceService.cs" />
     <Compile Include="BigPictureTray.Audio.cs" />
     <Compile Include="BigPictureTray.BigPictureSession.cs" />
-    <Compile Include="BigPictureTray.Bluetooth.cs" />
     <Compile Include="BigPictureTray.cs" />
+    <Compile Include="BigPictureWatcher.cs" />
+    <Compile Include="BluetoothService.cs" />
     <Compile Include="BigPictureTray.Startup.cs" />
     <Compile Include="BigPictureTray.XboxGip.cs" />
     <Compile Include="BpmLog.cs" />

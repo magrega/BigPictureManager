@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Windows.Automation;
 using BigPictureManager.Properties;
 using Windows.Devices.Radios;
 using static BigPictureManager.NativeAudioApi;
@@ -24,23 +23,8 @@ namespace BigPictureManager
             _restoreNightLightAfterBigPicture = true;
         }
 
-        private void ListenForBigPicture()
+        private void OnBigPictureOpened(object sender, EventArgs e)
         {
-            Automation.AddAutomationEventHandler(
-                eventId: WindowPattern.WindowOpenedEvent,
-                element: AutomationElement.RootElement,
-                scope: TreeScope.Children,
-                eventHandler: OnBigPictureWindowOpened
-            );
-        }
-
-        private void OnBigPictureWindowOpened(object sender, AutomationEventArgs e)
-        {
-            if (!IsBigPictureWindow(sender))
-            {
-                return;
-            }
-
             BpmLog.WriteLine("[Main] Steam Big Picture Mode started!");
             _uiContext.Post(
                 _ =>
@@ -67,108 +51,95 @@ namespace BigPictureManager
                         );
                     }
 
-                    _prevDevice = GetDefaultDevice();
+                    _prevDevice = _audio.GetCurrentDefault();
                     if (_selectedDevice != null && !string.IsNullOrWhiteSpace(_selectedDevice.Id))
                     {
-                        TrySetDefaultPlaybackDevice(_selectedDevice, "Big Picture opened");
+                        _audio.SetDefault(_selectedDevice, "Big Picture opened");
                     }
                 },
                 null
             );
 
             DiscoverXboxGipControllersForCurrentBpSession();
-
-            _targetWindow = sender as AutomationElement;
-            Automation.AddAutomationEventHandler(
-                eventId: WindowPattern.WindowClosedEvent,
-                element: _targetWindow,
-                scope: TreeScope.Element,
-                eventHandler: OnBigPictureWindowClosed
-            );
         }
 
-        private static bool IsBigPictureWindow(object sender)
+        private async void OnBigPictureClosed(object sender, EventArgs e)
         {
+            // async void UIA callback: a leaked exception would crash the process, so guard the whole body.
             try
             {
-                var element = sender as AutomationElement;
-                return element != null && element.Current.Name == AppConstants.BigPictureWindowName;
-            }
-            catch (ElementNotAvailableException)
-            {
-                return false;
-            }
-        }
-
-        private async void OnBigPictureWindowClosed(object sender, AutomationEventArgs e)
-        {
-            BpmLog.WriteLine("[Main] Steam Big Picture Mode closed!");
-            _uiContext.Post(
-                _ =>
-                {
-                    if (_prevDevice != null && !string.IsNullOrWhiteSpace(_prevDevice.Id))
+                BpmLog.WriteLine("[Main] Steam Big Picture Mode closed!");
+                _uiContext.Post(
+                    _ =>
                     {
-                        TrySetDefaultPlaybackDevice(
-                            _prevDevice,
-                            "Big Picture closed (restore previous default)"
+                        if (_prevDevice != null && !string.IsNullOrWhiteSpace(_prevDevice.Id))
+                        {
+                            _audio.SetDefault(
+                                _prevDevice,
+                                "Big Picture closed (restore previous default)"
+                            );
+                        }
+
+                        if (_restoreNightLightAfterBigPicture)
+                        {
+                            try
+                            {
+                                _nightLight.RestoreNightLight();
+                                BpmLog.WriteLine("[NightLight] Night Light restored on Big Picture exit.");
+                            }
+                            catch (Exception ex)
+                            {
+                                BpmLog.WriteLine(
+                                    "[Error] [NightLight] Restore on Big Picture exit failed: " + ex.Message
+                                );
+                            }
+                            finally
+                            {
+                                _restoreNightLightAfterBigPicture = false;
+                            }
+                        }
+                    },
+                    null
+                );
+
+                if (_isTurnOffBt)
+                {
+                    await _bluetooth.SetStateAsync(RadioState.Off);
+                }
+
+                List<ulong> xboxGipSnapshot = null;
+                lock (_xboxGipIdsSync)
+                {
+                    if (_xboxGipDeviceIdsFromLastBpOpen != null && _xboxGipDeviceIdsFromLastBpOpen.Count > 0)
+                    {
+                        xboxGipSnapshot = new List<ulong>(_xboxGipDeviceIdsFromLastBpOpen);
+                    }
+
+                    _xboxGipDeviceIdsFromLastBpOpen = null;
+                }
+
+                if (Settings.Default.isPowerOffXboxGipOnBpClose && WindowsIdentityHelper.IsAdministrator())
+                {
+                    _ = Task.Run(() => PowerOffXboxControllersAfterBigPictureExit(xboxGipSnapshot));
+                }
+                else
+                {
+                    if (Settings.Default.isPowerOffXboxGipOnBpClose)
+                    {
+                        BpmLog.WriteLine(
+                            "[Xbox] Power-off after Big Picture exit skipped (application is not running with administrator rights)."
                         );
                     }
 
-                    if (_restoreNightLightAfterBigPicture)
+                    if (xboxGipSnapshot != null && xboxGipSnapshot.Count > 0)
                     {
-                        try
-                        {
-                            _nightLight.RestoreNightLight();
-                            BpmLog.WriteLine("[NightLight] Night Light restored on Big Picture exit.");
-                        }
-                        catch (Exception ex)
-                        {
-                            BpmLog.WriteLine(
-                                "[Error] [NightLight] Restore on Big Picture exit failed: " + ex.Message
-                            );
-                        }
-                        finally
-                        {
-                            _restoreNightLightAfterBigPicture = false;
-                        }
+                        _ = Task.Run(() => RestoreXboxControllerLedAfterBigPictureExit(xboxGipSnapshot));
                     }
-                },
-                null
-            );
-
-            if (_isTurnOffBt)
-            {
-                await ManageBluetoothAsync(RadioState.Off);
-            }
-
-            List<ulong> xboxGipSnapshot = null;
-            lock (_xboxGipIdsSync)
-            {
-                if (_xboxGipDeviceIdsFromLastBpOpen != null && _xboxGipDeviceIdsFromLastBpOpen.Count > 0)
-                {
-                    xboxGipSnapshot = new List<ulong>(_xboxGipDeviceIdsFromLastBpOpen);
                 }
-
-                _xboxGipDeviceIdsFromLastBpOpen = null;
             }
-
-            if (Settings.Default.isPowerOffXboxGipOnBpClose && WindowsIdentityHelper.IsAdministrator())
+            catch (Exception ex)
             {
-                _ = Task.Run(() => PowerOffXboxControllersAfterBigPictureExit(xboxGipSnapshot));
-            }
-            else
-            {
-                if (Settings.Default.isPowerOffXboxGipOnBpClose)
-                {
-                    BpmLog.WriteLine(
-                        "[Xbox] Power-off after Big Picture exit skipped (application is not running with administrator rights)."
-                    );
-                }
-
-                if (xboxGipSnapshot != null && xboxGipSnapshot.Count > 0)
-                {
-                    _ = Task.Run(() => RestoreXboxControllerLedAfterBigPictureExit(xboxGipSnapshot));
-                }
+                BpmLog.WriteLine("[Error] [Main] Big Picture close handling failed: " + ex.Message);
             }
         }
 

@@ -12,6 +12,29 @@ namespace BigPictureManager
         private const string RotatedFileName = "BPMLog_old.txt";
         private const long MaxSizeBytes = 10L * 1024 * 1024;
         private static readonly object FileLock = new object();
+        private static readonly string LogDirectory = ResolveLogDirectory();
+        private static readonly string LogPath = Path.Combine(LogDirectory, LogFileName);
+        private static readonly string RotatedPath = Path.Combine(LogDirectory, RotatedFileName);
+
+        // %ProgramData%\BigPictureManager keeps the elevated UI process and the LocalSystem Xbox
+        // service writing to one log, and stays writable when the app is installed under Program Files
+        // (where the old next-to-exe location fails for non-elevated users).
+        private static string ResolveLogDirectory()
+        {
+            try
+            {
+                var dir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "BigPictureManager"
+                );
+                Directory.CreateDirectory(dir);
+                return dir;
+            }
+            catch
+            {
+                return AppDomain.CurrentDomain.BaseDirectory;
+            }
+        }
 
         /// <summary>
         /// Writes one line. <paramref name="message"/> should already include a category prefix, e.g. <c>[Main] ...</c>.
@@ -32,9 +55,8 @@ namespace BigPictureManager
             {
                 lock (FileLock)
                 {
-                    var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LogFileName);
-                    TryRotateIfTooLarge(path);
-                    File.AppendAllText(path, line + Environment.NewLine);
+                    TryRotateIfTooLarge(LogPath);
+                    File.AppendAllText(LogPath, line + Environment.NewLine);
                 }
             }
             catch
@@ -58,13 +80,12 @@ namespace BigPictureManager
                     return;
                 }
 
-                var rotated = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, RotatedFileName);
-                if (File.Exists(rotated))
+                if (File.Exists(RotatedPath))
                 {
-                    File.Delete(rotated);
+                    File.Delete(RotatedPath);
                 }
 
-                File.Move(path, rotated);
+                File.Move(path, RotatedPath);
             }
             catch
             {

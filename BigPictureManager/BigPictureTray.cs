@@ -2,10 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
-using System.Windows.Automation;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using BigPictureManager.Properties;
-using Windows.Devices.Radios;
 using static BigPictureManager.NativeAudioApi;
 
 namespace BigPictureManager
@@ -13,13 +12,13 @@ namespace BigPictureManager
     internal sealed partial class BigPictureTray : ApplicationContext
     {
         private readonly SynchronizationContext _uiContext;
-        private AutomationElement _targetWindow;
+        private readonly BigPictureWatcher _bpWatcher = new BigPictureWatcher();
         private AudioDevice _prevDevice;
         private AudioDevice _selectedDevice;
         private readonly NotifyIcon _trayIcon;
         private ToolStripMenuItem _audioMenuItem;
         private ToolStripMenuItem _btMenuItem;
-        private Radio _bluetoothDevice;
+        private readonly BluetoothService _bluetooth = new BluetoothService();
         private bool _isTurnOffBt = Settings.Default.isTurnOffBT;
         private bool _isAutoStart = Settings.Default.isAutoStart;
         private bool _isTurnOffNightLightOnBpStart = Settings.Default.isTurnOffNightLightOnBpStart;
@@ -32,12 +31,12 @@ namespace BigPictureManager
         private readonly object _xboxGipIdsSync = new object();
         private List<ulong> _xboxGipDeviceIdsFromLastBpOpen;
         private readonly NightLight _nightLight = new NightLight();
-        private readonly object _audioRefreshSync = new object();
-        private CancellationTokenSource _audioRefreshCts = new CancellationTokenSource();
+        private readonly AudioDeviceService _audio;
 
         public BigPictureTray()
         {
             _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
+            _audio = new AudioDeviceService(_uiContext);
             _trayIcon = new NotifyIcon
             {
                 Icon = Resources.TrayIcon,
@@ -45,9 +44,14 @@ namespace BigPictureManager
                 Text = Resources.AppTitle,
                 ContextMenuStrip = CreateMainMenu(),
             };
-            InitializeAsync();
-            StartAudioDeviceMonitoring();
-            ListenForBigPicture();
+            // Build the audio menu immediately and independently of Bluetooth: radio enumeration
+            // (RequestAccessAsync/GetRadiosAsync) can take a while and must not delay the audio list.
+            _audio.DevicesChanged += ApplyAudioDevicesToMenu;
+            _audio.Start();
+            InitializeBluetoothAsync();
+            _bpWatcher.Opened += OnBigPictureOpened;
+            _bpWatcher.Closed += OnBigPictureClosed;
+            _bpWatcher.Start();
             var exePath = Application.ExecutablePath;
             if (!string.IsNullOrEmpty(exePath))
             {
@@ -68,29 +72,33 @@ namespace BigPictureManager
                     ? "[Main] Application started with administrator rights."
                     : "[Main] Application started without administrator rights."
             );
-            try
+
+            // GIP discovery blocks ~5s when no controller is connected (16 read attempts x 300ms).
+            // Run it off the UI thread so the tray menu responds immediately — this is diagnostics only.
+            _ = Task.Run(() =>
             {
-                var ids = XboxGipPowerOff.TryDiscoverGipControllers();
-                BpmLog.WriteLine(
-                    "[Xbox] At startup: found " + ids.Count + " wireless Xbox controller(s) (GIP enumeration)."
-                );
-            }
-            catch (Exception ex)
-            {
-                BpmLog.WriteLine("[Error] [Xbox] Startup controller enumeration failed: " + ex.Message);
-            }
+                try
+                {
+                    var ids = XboxGipPowerOff.TryDiscoverGipControllers();
+                    BpmLog.WriteLine(
+                        "[Xbox] At startup: found " + ids.Count + " wireless Xbox controller(s) (GIP enumeration)."
+                    );
+                }
+                catch (Exception ex)
+                {
+                    BpmLog.WriteLine("[Error] [Xbox] Startup controller enumeration failed: " + ex.Message);
+                }
+            });
         }
 
-        private async void InitializeAsync()
+        private async void InitializeBluetoothAsync()
         {
-            _bluetoothDevice = await RequestBluetoothDeviceAsync();
-            var isBtAvailable = _bluetoothDevice != null;
+            var isBtAvailable = await _bluetooth.InitializeAsync();
             _btMenuItem.Text = isBtAvailable
                 ? Resources.MenuBluetoothTurnOffOnBpClose
                 : Resources.MenuBluetoothNoDevice;
             _btMenuItem.Checked = isBtAvailable && _isTurnOffBt;
             _btMenuItem.Enabled = isBtAvailable;
-            QueueAudioDeviceRefresh(0);
         }
 
         private ContextMenuStrip CreateMainMenu()
@@ -201,14 +209,8 @@ namespace BigPictureManager
 
         private void OnExit(object sender, EventArgs e)
         {
-            System.Windows.Automation.Automation.RemoveAllEventHandlers();
-            NativeAudioApi.StopDeviceWatcher();
-            lock (_audioRefreshSync)
-            {
-                _audioRefreshCts.Cancel();
-                _audioRefreshCts.Dispose();
-                _audioRefreshCts = new CancellationTokenSource();
-            }
+            _bpWatcher.Dispose();
+            _audio.Dispose();
             BpmLog.WriteLine("[Main] App exit requested.");
 
             _trayIcon.Visible = false;
