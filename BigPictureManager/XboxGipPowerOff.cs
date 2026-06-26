@@ -17,6 +17,7 @@ namespace BigPictureManager
         internal const string ServiceArgFlag = "--xbpoweroff-svc";
         internal const string ServiceArgIndexPrefix = "--xbpoweroff-index";
         internal const string ServiceArgIdsPrefix = "--xbpoweroff-ids";
+        internal const string ServiceArgLogDirPrefix = "--xbpoweroff-logdir";
 
         private const string ServiceName = "BigPictureMgr_XboxGipOff";
         private const string GipDevicePath = @"\\.\XboxGIP";
@@ -226,10 +227,16 @@ namespace BigPictureManager
             return command;
         }
 
-        internal static bool TryParseServiceArgs(string[] args, out int targetIndex, out List<ulong> explicitDeviceIds)
+        internal static bool TryParseServiceArgs(
+            string[] args,
+            out int targetIndex,
+            out List<ulong> explicitDeviceIds,
+            out string logDirectory
+        )
         {
             targetIndex = -1;
             explicitDeviceIds = null;
+            logDirectory = null;
             if (args == null || args.Length == 0)
             {
                 return false;
@@ -241,6 +248,14 @@ namespace BigPictureManager
                 if (string.Equals(args[i], ServiceArgFlag, StringComparison.OrdinalIgnoreCase))
                 {
                     svc = true;
+                }
+                else if (
+                    string.Equals(args[i], ServiceArgLogDirPrefix, StringComparison.OrdinalIgnoreCase)
+                    && i + 1 < args.Length
+                )
+                {
+                    logDirectory = args[i + 1];
+                    i++;
                 }
                 else if (
                     string.Equals(args[i], ServiceArgIndexPrefix, StringComparison.OrdinalIgnoreCase)
@@ -410,6 +425,9 @@ namespace BigPictureManager
                 throw new InvalidOperationException("Executable path is empty.");
             }
 
+            // Pass our (the launching user's) log directory so the SYSTEM service logs to the same file.
+            var logDirArg = $" {ServiceArgLogDirPrefix} \"{BpmLog.Directory}\"";
+
             string binPath;
             if (knownDeviceIds != null && knownDeviceIds.Count > 0)
             {
@@ -417,15 +435,15 @@ namespace BigPictureManager
                     ",",
                     knownDeviceIds.Distinct().Select(id => id.ToString("X16", CultureInfo.InvariantCulture))
                 );
-                binPath = $"\"{exePath}\" {ServiceArgFlag} {ServiceArgIdsPrefix} {hex}";
+                binPath = $"\"{exePath}\" {ServiceArgFlag} {ServiceArgIdsPrefix} {hex}{logDirArg}";
             }
             else if (targetIndex >= 0)
             {
-                binPath = $"\"{exePath}\" {ServiceArgFlag} {ServiceArgIndexPrefix} {targetIndex}";
+                binPath = $"\"{exePath}\" {ServiceArgFlag} {ServiceArgIndexPrefix} {targetIndex}{logDirArg}";
             }
             else
             {
-                binPath = $"\"{exePath}\" {ServiceArgFlag}";
+                binPath = $"\"{exePath}\" {ServiceArgFlag}{logDirArg}";
             }
 
             BpmLog.WriteLine("[Xbox] Creating ephemeral Windows service \"" + ServiceName + "\".");

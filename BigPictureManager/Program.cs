@@ -13,10 +13,13 @@ namespace BigPictureManager
                 XboxGipPowerOff.TryParseServiceArgs(
                     args ?? Array.Empty<string>(),
                     out var xboxPowerOffTargetIndex,
-                    out var xboxExplicitDeviceIds
+                    out var xboxExplicitDeviceIds,
+                    out var xboxServiceLogDirectory
                 )
             )
             {
+                // Point the SYSTEM service at the launching user's log directory before it logs anything.
+                BpmLog.UseLogDirectory(xboxServiceLogDirectory);
                 Environment.Exit(
                     XboxGipPowerOff.RunServiceMode(xboxPowerOffTargetIndex, xboxExplicitDeviceIds)
                 );

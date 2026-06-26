@@ -12,22 +12,60 @@ namespace BigPictureManager
         private const string RotatedFileName = "BPMLog_old.txt";
         private const long MaxSizeBytes = 10L * 1024 * 1024;
         private static readonly object FileLock = new object();
-        private static readonly string LogDirectory = ResolveLogDirectory();
-        private static readonly string LogPath = Path.Combine(LogDirectory, LogFileName);
-        private static readonly string RotatedPath = Path.Combine(LogDirectory, RotatedFileName);
+        private static string _logDirectory = ResolveDefaultLogDirectory();
 
-        // %ProgramData%\BigPictureManager keeps the elevated UI process and the LocalSystem Xbox
-        // service writing to one log, and stays writable when the app is installed under Program Files
-        // (where the old next-to-exe location fails for non-elevated users).
-        private static string ResolveLogDirectory()
+        /// <summary>
+        /// Current log directory. The ephemeral SYSTEM service is launched with this path so its lines
+        /// land in the launching user's log file (SYSTEM can write to the user's profile).
+        /// </summary>
+        internal static string Directory
+        {
+            get
+            {
+                lock (FileLock)
+                {
+                    return _logDirectory;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Overrides the log directory. Used by the ephemeral SYSTEM service, whose own
+        /// %LOCALAPPDATA% points at the system profile rather than the launching user's. Call before
+        /// the first <see cref="WriteLine"/>.
+        /// </summary>
+        internal static void UseLogDirectory(string directory)
+        {
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                return;
+            }
+
+            try
+            {
+                System.IO.Directory.CreateDirectory(directory);
+                lock (FileLock)
+                {
+                    _logDirectory = directory;
+                }
+            }
+            catch
+            {
+                // Keep the default directory if the supplied one is unusable.
+            }
+        }
+
+        // Per-user %LOCALAPPDATA%\BigPictureManager, alongside the application settings. Writable without
+        // elevation and not lost when the app is installed under Program Files.
+        private static string ResolveDefaultLogDirectory()
         {
             try
             {
                 var dir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "BigPictureManager"
                 );
-                Directory.CreateDirectory(dir);
+                System.IO.Directory.CreateDirectory(dir);
                 return dir;
             }
             catch
@@ -55,8 +93,9 @@ namespace BigPictureManager
             {
                 lock (FileLock)
                 {
-                    TryRotateIfTooLarge(LogPath);
-                    File.AppendAllText(LogPath, line + Environment.NewLine);
+                    var logPath = Path.Combine(_logDirectory, LogFileName);
+                    TryRotateIfTooLarge(logPath);
+                    File.AppendAllText(logPath, line + Environment.NewLine);
                 }
             }
             catch
@@ -80,12 +119,13 @@ namespace BigPictureManager
                     return;
                 }
 
-                if (File.Exists(RotatedPath))
+                var rotatedPath = Path.Combine(_logDirectory, RotatedFileName);
+                if (File.Exists(rotatedPath))
                 {
-                    File.Delete(RotatedPath);
+                    File.Delete(rotatedPath);
                 }
 
-                File.Move(path, RotatedPath);
+                File.Move(path, rotatedPath);
             }
             catch
             {
