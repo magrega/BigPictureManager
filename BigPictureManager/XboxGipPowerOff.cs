@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
-using System.Linq;
+using System.IO;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace BigPictureManager
 {
@@ -15,9 +14,11 @@ namespace BigPictureManager
     internal static class XboxGipPowerOff
     {
         internal const string ServiceArgFlag = "--xbpoweroff-svc";
-        internal const string ServiceArgIndexPrefix = "--xbpoweroff-index";
-        internal const string ServiceArgIdsPrefix = "--xbpoweroff-ids";
         internal const string ServiceArgLogDirPrefix = "--xbpoweroff-logdir";
+
+        /// <summary>Elevated one-shot helper args: install/remove the persistent power-off service.</summary>
+        internal const string InstallServiceArg = "--install-xbox-service";
+        internal const string UninstallServiceArg = "--uninstall-xbox-service";
 
         private const string ServiceName = "BigPictureMgr_XboxGipOff";
         private const string GipDevicePath = @"\\.\XboxGIP";
@@ -117,8 +118,6 @@ namespace BigPictureManager
 
         private static IntPtr _serviceStatusHandle;
         private static ServiceStatus _serviceStatus;
-        private static int _serviceTargetIndex = -1;
-        private static List<ulong> _serviceExplicitDeviceIds;
 
         /// <summary>
         /// Enumerates Xbox GIP devices (opens \\.\XboxGIP only; does not require admin).
@@ -227,15 +226,8 @@ namespace BigPictureManager
             return command;
         }
 
-        internal static bool TryParseServiceArgs(
-            string[] args,
-            out int targetIndex,
-            out List<ulong> explicitDeviceIds,
-            out string logDirectory
-        )
+        internal static bool TryParseServiceArgs(string[] args, out string logDirectory)
         {
-            targetIndex = -1;
-            explicitDeviceIds = null;
             logDirectory = null;
             if (args == null || args.Length == 0)
             {
@@ -257,43 +249,6 @@ namespace BigPictureManager
                     logDirectory = args[i + 1];
                     i++;
                 }
-                else if (
-                    string.Equals(args[i], ServiceArgIndexPrefix, StringComparison.OrdinalIgnoreCase)
-                    && i + 1 < args.Length
-                )
-                {
-                    int.TryParse(args[i + 1], out targetIndex);
-                    i++;
-                }
-                else if (
-                    string.Equals(args[i], ServiceArgIdsPrefix, StringComparison.OrdinalIgnoreCase)
-                    && i + 1 < args.Length
-                )
-                {
-                    var parts = args[i + 1].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-                    var ids = new List<ulong>();
-                    foreach (var p in parts)
-                    {
-                        if (
-                            ulong.TryParse(
-                                p.Trim(),
-                                NumberStyles.HexNumber,
-                                CultureInfo.InvariantCulture,
-                                out var id
-                            )
-                        )
-                        {
-                            ids.Add(id);
-                        }
-                    }
-
-                    if (ids.Count > 0)
-                    {
-                        explicitDeviceIds = ids.Distinct().ToList();
-                    }
-
-                    i++;
-                }
             }
 
             return svc;
@@ -302,25 +257,9 @@ namespace BigPictureManager
         /// <summary>
         /// Entry point when launched as SCM worker (--xbpoweroff-svc). Blocks until the service stops.
         /// </summary>
-        internal static int RunServiceMode(int targetIndex, List<ulong> explicitDeviceIds)
+        internal static int RunServiceMode()
         {
-            _serviceTargetIndex = targetIndex;
-            _serviceExplicitDeviceIds = explicitDeviceIds;
-
-            if (explicitDeviceIds != null && explicitDeviceIds.Count > 0)
-            {
-                BpmLog.WriteLine(
-                    "[Xbox] Ephemeral service worker started (explicit device id count: " + explicitDeviceIds.Count + ")."
-                );
-            }
-            else if (targetIndex >= 0)
-            {
-                BpmLog.WriteLine("[Xbox] Ephemeral service worker started (target index: " + targetIndex + ").");
-            }
-            else
-            {
-                BpmLog.WriteLine("[Xbox] Ephemeral service worker started (discover all controllers).");
-            }
+            BpmLog.WriteLine("[Xbox] Power-off service worker started.");
 
             var entry0 = new ServiceTableEntry { lpServiceName = ServiceName, lpServiceProc = ServiceMainPtr };
             var entry1 = new ServiceTableEntry { lpServiceName = null, lpServiceProc = IntPtr.Zero };
@@ -391,7 +330,7 @@ namespace BigPictureManager
 
             try
             {
-                DoPowerOff(_serviceTargetIndex);
+                DoPowerOff();
             }
             finally
             {
@@ -412,12 +351,44 @@ namespace BigPictureManager
             SetServiceStatus(_serviceStatusHandle, ref _serviceStatus);
         }
 
+        private const string ServiceDisplayName = "Big Picture Manager — Xbox controller power off";
+
+        // DACL: SYSTEM and Builtin Admins keep full control; Interactive Users may start/query only.
+        // (RP = SERVICE_START, CC/LC query, LO interrogate, RC read.)
+        private const string ServiceSddl =
+            "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCRPLORC;;;IU)";
+
+        /// <summary>True when the persistent power-off service is installed (query works without admin).</summary>
+        internal static bool IsServiceInstalled()
+        {
+            var scm = OpenSCManager(null, null, ScManagerConnect);
+            if (scm == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            try
+            {
+                var svc = OpenService(scm, ServiceName, ServiceQueryStatus);
+                if (svc == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                CloseServiceHandle(svc);
+                return true;
+            }
+            finally
+            {
+                CloseServiceHandle(scm);
+            }
+        }
+
         /// <summary>
-        /// Creates a temporary SYSTEM service, runs power-off, then deletes the service. Caller must be elevated admin.
+        /// Installs the persistent, demand-start SYSTEM service and grants interactive users the right to
+        /// start it (so any user can trigger a power-off without elevation). Requires admin; throws on failure.
         /// </summary>
-        /// <param name="targetIndex">If &gt;= 0, power off controller by index after in-service discovery (ignored when <paramref name="knownDeviceIds"/> is set).</param>
-        /// <param name="knownDeviceIds">If non-empty, power off these device IDs only (no GIP discovery in the service).</param>
-        internal static void PowerOffViaEphemeralService(int targetIndex = -1, IReadOnlyList<ulong> knownDeviceIds = null)
+        internal static void InstallService()
         {
             var exePath = System.Windows.Forms.Application.ExecutablePath;
             if (string.IsNullOrEmpty(exePath))
@@ -425,36 +396,17 @@ namespace BigPictureManager
                 throw new InvalidOperationException("Executable path is empty.");
             }
 
-            // Pass our (the launching user's) log directory so the SYSTEM service logs to the same file.
-            var logDirArg = $" {ServiceArgLogDirPrefix} \"{BpmLog.Directory}\"";
-
-            string binPath;
-            if (knownDeviceIds != null && knownDeviceIds.Count > 0)
-            {
-                var hex = string.Join(
-                    ",",
-                    knownDeviceIds.Distinct().Select(id => id.ToString("X16", CultureInfo.InvariantCulture))
-                );
-                binPath = $"\"{exePath}\" {ServiceArgFlag} {ServiceArgIdsPrefix} {hex}{logDirArg}";
-            }
-            else if (targetIndex >= 0)
-            {
-                binPath = $"\"{exePath}\" {ServiceArgFlag} {ServiceArgIndexPrefix} {targetIndex}{logDirArg}";
-            }
-            else
-            {
-                binPath = $"\"{exePath}\" {ServiceArgFlag}{logDirArg}";
-            }
-
-            BpmLog.WriteLine("[Xbox] Creating ephemeral Windows service \"" + ServiceName + "\".");
-            BpmLog.WriteLine("[Xbox] Service binary path: " + binPath);
+            // The global service logs to a machine-wide location (it runs as SYSTEM for every user).
+            var logDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "BigPictureManager"
+            );
+            var binPath = $"\"{exePath}\" {ServiceArgFlag} {ServiceArgLogDirPrefix} \"{logDir}\"";
 
             var scm = OpenSCManager(null, null, ScManagerCreateService);
             if (scm == IntPtr.Zero)
             {
-                var err = Marshal.GetLastWin32Error();
-                BpmLog.WriteLine("[Error] [Xbox] OpenSCManager failed: Win32 " + err);
-                throw new Win32Exception(err);
+                throw new Win32Exception(Marshal.GetLastWin32Error());
             }
 
             try
@@ -462,7 +414,7 @@ namespace BigPictureManager
                 var svc = CreateService(
                     scm,
                     ServiceName,
-                    "Big Picture Manager — Xbox GIP power off",
+                    ServiceDisplayName,
                     ServiceAllAccess,
                     ServiceTypeOwnProcess,
                     ServiceDemandStart,
@@ -480,79 +432,121 @@ namespace BigPictureManager
                     var err = Marshal.GetLastWin32Error();
                     if (err != ErrorServiceExists)
                     {
-                        BpmLog.WriteLine("[Error] [Xbox] CreateService failed: Win32 " + err);
                         throw new Win32Exception(err);
                     }
 
-                    BpmLog.WriteLine("[Xbox] Service \"" + ServiceName + "\" already exists; opening and updating configuration.");
                     svc = OpenService(scm, ServiceName, ServiceAllAccess);
                     if (svc == IntPtr.Zero)
                     {
-                        err = Marshal.GetLastWin32Error();
-                        BpmLog.WriteLine("[Error] [Xbox] OpenService failed: Win32 " + err);
-                        throw new Win32Exception(err);
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
                     }
 
-                    if (
-                        !ChangeServiceConfig(
-                            svc,
-                            ServiceTypeOwnProcess,
-                            ServiceDemandStart,
-                            ServiceErrorIgnore,
-                            binPath,
-                            null,
-                            IntPtr.Zero,
-                            null,
-                            null,
-                            null,
-                            null
-                        )
-                    )
+                    if (!ChangeServiceConfig(svc, ServiceTypeOwnProcess, ServiceDemandStart, ServiceErrorIgnore,
+                            binPath, null, IntPtr.Zero, null, null, null, ServiceDisplayName))
                     {
-                        err = Marshal.GetLastWin32Error();
-                        BpmLog.WriteLine("[Error] [Xbox] ChangeServiceConfig failed: Win32 " + err);
+                        var configErr = Marshal.GetLastWin32Error();
                         CloseServiceHandle(svc);
-                        throw new Win32Exception(err);
+                        throw new Win32Exception(configErr);
                     }
-
-                    BpmLog.WriteLine("[Xbox] Existing service configuration updated.");
-                }
-                else
-                {
-                    BpmLog.WriteLine("[Xbox] Ephemeral service \"" + ServiceName + "\" created successfully.");
                 }
 
                 try
                 {
-                    BpmLog.WriteLine("[Xbox] Starting ephemeral service \"" + ServiceName + "\".");
-                    if (!StartService(svc, 0, IntPtr.Zero))
+                    GrantInteractiveUsersStart(svc);
+                    BpmLog.WriteLine("[Xbox] Power-off service installed.");
+                }
+                finally
+                {
+                    CloseServiceHandle(svc);
+                }
+            }
+            finally
+            {
+                CloseServiceHandle(scm);
+            }
+        }
+
+        /// <summary>Removes the persistent power-off service. Requires admin; throws on failure.</summary>
+        internal static void UninstallService()
+        {
+            var scm = OpenSCManager(null, null, ScManagerConnect);
+            if (scm == IntPtr.Zero)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            try
+            {
+                var svc = OpenService(scm, ServiceName, ServiceDelete);
+                if (svc == IntPtr.Zero)
+                {
+                    var err = Marshal.GetLastWin32Error();
+                    if (err == ErrorServiceDoesNotExist)
                     {
-                        var err = Marshal.GetLastWin32Error();
-                        if (err != 1056)
-                        {
-                            BpmLog.WriteLine("[Error] [Xbox] StartService failed: Win32 " + err);
-                            throw new Win32Exception(err);
-                        }
-
-                        BpmLog.WriteLine("[Xbox] Service was already running; waiting for power-off to complete.");
-                    }
-                    else
-                    {
-                        BpmLog.WriteLine("[Xbox] StartService succeeded.");
+                        return;
                     }
 
-                    Thread.Sleep(3000);
+                    throw new Win32Exception(err);
+                }
 
-                    BpmLog.WriteLine("[Xbox] Deleting ephemeral service \"" + ServiceName + "\".");
+                try
+                {
                     if (!DeleteService(svc))
                     {
-                        BpmLog.WriteLine(
-                            "[Error] [Xbox] DeleteService failed: Win32 " + Marshal.GetLastWin32Error()
-                        );
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
+                    }
+
+                    BpmLog.WriteLine("[Xbox] Power-off service removed.");
+                }
+                finally
+                {
+                    CloseServiceHandle(svc);
+                }
+            }
+            finally
+            {
+                CloseServiceHandle(scm);
+            }
+        }
+
+        /// <summary>
+        /// Starts the pre-installed service so it powers off connected controllers. Works without admin
+        /// (interactive users were granted SERVICE_START at install time). No-op if not installed.
+        /// </summary>
+        internal static void TriggerPowerOff()
+        {
+            var scm = OpenSCManager(null, null, ScManagerConnect);
+            if (scm == IntPtr.Zero)
+            {
+                BpmLog.WriteLine("[Error] [Xbox] OpenSCManager failed: Win32 " + Marshal.GetLastWin32Error());
+                return;
+            }
+
+            try
+            {
+                var svc = OpenService(scm, ServiceName, ServiceStart | ServiceQueryStatus);
+                if (svc == IntPtr.Zero)
+                {
+                    BpmLog.WriteLine(
+                        "[Xbox] Power-off service is not available (Win32 " + Marshal.GetLastWin32Error() + ")."
+                    );
+                    return;
+                }
+
+                try
+                {
+                    if (StartService(svc, 0, IntPtr.Zero))
+                    {
+                        BpmLog.WriteLine("[Xbox] Power-off service triggered.");
                     }
                     else
                     {
-                        BpmLog.WriteLine("[Xbox] Ephemeral service \"" + ServiceName + "\" deleted successfully.");
+                        var err = Marshal.GetLastWin32Error();
+                        BpmLog.WriteLine(
+                            err == ErrorServiceAlreadyRunning
+                                ? "[Xbox] Power-off service was already running."
+                                : "[Error] [Xbox] Could not start power-off service: Win32 " + err
+                        );
                     }
                 }
                 finally
@@ -566,29 +560,28 @@ namespace BigPictureManager
             }
         }
 
-        private static void DoPowerOff(int targetIdx)
+        private static void GrantInteractiveUsersStart(IntPtr service)
         {
-            var explicitIds = _serviceExplicitDeviceIds;
-            if (explicitIds != null && explicitIds.Count > 0)
+            if (!ConvertStringSecurityDescriptorToSecurityDescriptor(ServiceSddl, 1, out var securityDescriptor, out _))
             {
-                var ok = 0;
-                var fail = 0;
-                foreach (var id in explicitIds)
-                {
-                    if (PowerOffDevice(id))
-                    {
-                        ok++;
-                    }
-                    else
-                    {
-                        fail++;
-                    }
-                }
-
-                LogPowerOffSummary(ok, fail, explicitIds.Count);
-                return;
+                throw new Win32Exception(Marshal.GetLastWin32Error());
             }
 
+            try
+            {
+                if (!SetServiceObjectSecurity(service, DaclSecurityInformation, securityDescriptor))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+            }
+            finally
+            {
+                LocalFree(securityDescriptor);
+            }
+        }
+
+        private static void DoPowerOff()
+        {
             var ids = new List<ulong>(MaxControllers);
             DiscoverDevices(ids, MaxControllers);
 
@@ -600,26 +593,9 @@ namespace BigPictureManager
 
             var succeeded = 0;
             var failed = 0;
-            var attempted = 0;
-            if (targetIdx < 0)
+            foreach (var id in ids)
             {
-                foreach (var id in ids)
-                {
-                    attempted++;
-                    if (PowerOffDevice(id))
-                    {
-                        succeeded++;
-                    }
-                    else
-                    {
-                        failed++;
-                    }
-                }
-            }
-            else if (targetIdx < ids.Count)
-            {
-                attempted = 1;
-                if (PowerOffDevice(ids[targetIdx]))
+                if (PowerOffDevice(id))
                 {
                     succeeded++;
                 }
@@ -629,10 +605,7 @@ namespace BigPictureManager
                 }
             }
 
-            if (attempted > 0)
-            {
-                LogPowerOffSummary(succeeded, failed, attempted);
-            }
+            LogPowerOffSummary(succeeded, failed, ids.Count);
         }
 
         private static void LogPowerOffSummary(int succeeded, int failed, int attempted)
@@ -825,8 +798,33 @@ namespace BigPictureManager
             }
         }
 
+        private const uint ScManagerConnect = 0x00001;
         private const uint ScManagerCreateService = 0x00002;
         private const uint ServiceAllAccess = 0xF01FF;
+        private const uint ServiceQueryStatus = 0x00004;
+        private const uint ServiceStart = 0x00010;
+        private const uint ServiceDelete = 0x10000;
+        private const uint DaclSecurityInformation = 0x00000004;
+        private const int ErrorServiceDoesNotExist = 1060;
+        private const int ErrorServiceAlreadyRunning = 1056;
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor(
+            string stringSecurityDescriptor,
+            uint stringSdRevision,
+            out IntPtr securityDescriptor,
+            out uint securityDescriptorSize
+        );
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool SetServiceObjectSecurity(
+            IntPtr hService,
+            uint dwSecurityInformation,
+            IntPtr lpSecurityDescriptor
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr LocalFree(IntPtr hMem);
 
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern IntPtr OpenSCManager(string machineName, string databaseName, uint dwAccess);

@@ -23,6 +23,8 @@ namespace BigPictureManager
         internal static readonly string GlyphStartup = Glyph(0xE7E8);     // PowerButton
         internal static readonly string GlyphAbout = Glyph(0xE946);       // Info
         internal static readonly string GlyphExit = Glyph(0xE711);        // Cancel
+        internal static readonly string GlyphSettings = Glyph(0xE713);    // Settings (gear)
+        internal static readonly string GlyphBack = Glyph(0xE72B);        // Back
         private static readonly string GlyphCheck = Glyph(0xE73E);        // CheckMark
 
         private static string Glyph(int codePoint) => ((char)codePoint).ToString();
@@ -33,10 +35,12 @@ namespace BigPictureManager
         {
             public RowKind Kind;
             public string Glyph;
+            public Image IconImage;
             public string Text;
             public bool Enabled = true;
             public bool On;
             public bool ClosesOnClick;
+            public bool RebuildsOnClick;
             public Action OnClick;
             public int Top;
             public int Height;
@@ -46,6 +50,9 @@ namespace BigPictureManager
 
         private readonly List<Row> _rows = new List<Row>();
         private int _hoverIndex = -1;
+
+        /// <summary>Rebuilds the rows from current app state (used by ShowAtCursor and drill-down navigation).</summary>
+        public Action ContentBuilder;
 
         private float _scale = 1f;
         private Font _textFont;
@@ -92,6 +99,13 @@ namespace BigPictureManager
         public void AddAction(string glyph, string text, Action onClick) =>
             _rows.Add(new Row { Kind = RowKind.Action, Glyph = glyph, Text = text, OnClick = onClick, ClosesOnClick = true });
 
+        public void AddActionImage(Image icon, string text, Action onClick) =>
+            _rows.Add(new Row { Kind = RowKind.Action, IconImage = icon, Text = text, OnClick = onClick, ClosesOnClick = true });
+
+        /// <summary>A row that switches the menu to another page in place (no close).</summary>
+        public void AddNavigation(string glyph, string text, Action onClick) =>
+            _rows.Add(new Row { Kind = RowKind.Action, Glyph = glyph, Text = text, OnClick = onClick, RebuildsOnClick = true });
+
         public void AddToggle(string glyph, string text, bool isOn, bool enabled, Action onClick) =>
             _rows.Add(new Row { Kind = RowKind.Toggle, Glyph = glyph, Text = text, On = isOn, Enabled = enabled, OnClick = onClick });
 
@@ -110,6 +124,7 @@ namespace BigPictureManager
                 CreateHandle();
             }
 
+            ContentBuilder?.Invoke();
             BuildFonts();
             LayoutRows();
 
@@ -268,7 +283,16 @@ namespace BigPictureManager
 
             var textLeft = rowRect.Left + Px(14);
 
-            if (!string.IsNullOrEmpty(row.Glyph))
+            if (row.IconImage != null)
+            {
+                var iconSize = Px(18);
+                var ix = rowRect.Left + Px(10) + (Px(24) - iconSize) / 2;
+                var iy = rowRect.Top + (rowRect.Height - iconSize) / 2;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(row.IconImage, new Rectangle(ix, iy, iconSize, iconSize));
+                textLeft = rowRect.Left + Px(42);
+            }
+            else if (!string.IsNullOrEmpty(row.Glyph))
             {
                 var iconRect = new Rectangle(rowRect.Left + Px(10), rowRect.Top, Px(24), rowRect.Height);
                 TextRenderer.DrawText(g, row.Glyph, _iconFont, iconRect, iconColor,
@@ -374,6 +398,14 @@ namespace BigPictureManager
                 return;
             }
 
+            if (row.RebuildsOnClick)
+            {
+                // Drill-down/back: switch page and re-render in place.
+                action?.Invoke();
+                Rebuild();
+                return;
+            }
+
             // Toggle/radio: flip the displayed state instantly for snappy feedback, then apply the
             // (now debounced) backend change without blocking. The menu stays open.
             ApplyInstantVisual(row);
@@ -383,6 +415,33 @@ namespace BigPictureManager
             {
                 BeginInvoke(action);
             }
+        }
+
+        private void Rebuild()
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            ContentBuilder?.Invoke();
+            LayoutRows();
+            ClampToScreen();
+            var p = PointToClient(Cursor.Position);
+            _hoverIndex = RowIndexAt(p.Y);
+            Invalidate();
+        }
+
+        private void ClampToScreen()
+        {
+            var area = Screen.FromPoint(Location).WorkingArea;
+            var x = Location.X;
+            var y = Location.Y;
+            if (x + Width > area.Right) x = area.Right - Width;
+            if (y + Height > area.Bottom) y = area.Bottom - Height;
+            if (x < area.Left) x = area.Left;
+            if (y < area.Top) y = area.Top;
+            Location = new Point(x, y);
         }
 
         private void ApplyInstantVisual(Row row)

@@ -6,7 +6,8 @@ using System.Text;
 namespace BigPictureManager
 {
     /// <summary>
-    /// Registers a per-user logon task that starts Big Picture Manager with highest available privileges.
+    /// Legacy elevated logon scheduled task from older versions. Kept only to detect and remove it during
+    /// migration to the per-user <see cref="StartupRegistration"/> Run entry.
     /// </summary>
     internal static class ElevatedLogonStartupTask
     {
@@ -18,41 +19,11 @@ namespace BigPictureManager
             var exists = exitCode == 0;
             BpmLog.WriteLine(
                 exists
-                    ? "[Startup] Scheduled task \"" + TaskName + "\" is registered."
-                    : "[Startup] Scheduled task \"" + TaskName + "\" is not registered."
+                    ? "[Startup] Legacy scheduled task \"" + TaskName + "\" is present."
+                    : "[Startup] Legacy scheduled task \"" + TaskName + "\" is not present."
             );
 
             return exists;
-        }
-
-        public static bool TryRegister(string exePath, out string errorMessage)
-        {
-            errorMessage = null;
-            if (string.IsNullOrWhiteSpace(exePath))
-            {
-                errorMessage = "Executable path is empty.";
-                BpmLog.WriteLine("[Error] [Startup] Cannot create scheduled task: " + errorMessage);
-                return false;
-            }
-
-            string tr = $"\\\"{exePath}\\\"";
-            string args = $"/Create /TN \"{TaskName}\" /TR \"{tr}\" /SC ONLOGON /RL HIGHEST /F";
-
-
-            BpmLog.WriteLine(
-                "[Startup] Creating scheduled task \"" + TaskName + "\" (ONLOGON, highest privileges) for: " + exePath
-            );
-
-            var exitCode = RunSchTasks(args, out _, out _);
-            if (exitCode == 0)
-            {
-                BpmLog.WriteLine("[Startup] Scheduled task \"" + TaskName + "\" created successfully.");
-                return true;
-            }
-
-            errorMessage = DescribeSchTasksFailure("create", exitCode);
-            BpmLog.WriteLine("[Error] [Startup] Failed to create scheduled task: " + errorMessage);
-            return false;
         }
 
         public static bool TryUnregister(out string errorMessage)

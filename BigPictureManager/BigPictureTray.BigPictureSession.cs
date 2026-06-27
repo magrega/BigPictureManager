@@ -26,6 +26,7 @@ namespace BigPictureManager
         private void OnBigPictureOpened(object sender, EventArgs e)
         {
             BpmLog.WriteLine("[Main] Steam Big Picture Mode started!");
+            _bigPictureActive = true;
             _uiContext.Post(
                 _ =>
                 {
@@ -60,7 +61,7 @@ namespace BigPictureManager
                 null
             );
 
-            DiscoverXboxGipControllersForCurrentBpSession();
+            DiscoverAndDimXboxControllers();
         }
 
         private async void OnBigPictureClosed(object sender, EventArgs e)
@@ -69,6 +70,8 @@ namespace BigPictureManager
             try
             {
                 BpmLog.WriteLine("[Main] Steam Big Picture Mode closed!");
+                _bigPictureActive = false;
+                _uiContext.Post(_ => _xboxRedimTimer.Stop(), null);
                 _uiContext.Post(
                     _ =>
                     {
@@ -118,55 +121,20 @@ namespace BigPictureManager
                     _xboxGipDeviceIdsFromLastBpOpen = null;
                 }
 
-                if (Settings.Default.isPowerOffXboxGipOnBpClose && WindowsIdentityHelper.IsAdministrator())
+                // Power-off goes through the global service (any user, no elevation). If it's off or the
+                // service isn't installed, just restore the dimmed guide LED instead.
+                if (Settings.Default.isPowerOffXboxGipOnBpClose && XboxGipPowerOff.IsServiceInstalled())
                 {
-                    _ = Task.Run(() => PowerOffXboxControllersAfterBigPictureExit(xboxGipSnapshot));
+                    _ = Task.Run(() => XboxGipPowerOff.TriggerPowerOff());
                 }
-                else
+                else if (xboxGipSnapshot != null && xboxGipSnapshot.Count > 0)
                 {
-                    if (Settings.Default.isPowerOffXboxGipOnBpClose)
-                    {
-                        BpmLog.WriteLine(
-                            "[Xbox] Power-off after Big Picture exit skipped (application is not running with administrator rights)."
-                        );
-                    }
-
-                    if (xboxGipSnapshot != null && xboxGipSnapshot.Count > 0)
-                    {
-                        _ = Task.Run(() => RestoreXboxControllerLedAfterBigPictureExit(xboxGipSnapshot));
-                    }
+                    _ = Task.Run(() => RestoreXboxControllerLedAfterBigPictureExit(xboxGipSnapshot));
                 }
             }
             catch (Exception ex)
             {
                 BpmLog.WriteLine("[Error] [Main] Big Picture close handling failed: " + ex.Message);
-            }
-        }
-
-        private static void PowerOffXboxControllersAfterBigPictureExit(List<ulong> xboxGipSnapshot)
-        {
-            try
-            {
-                if (xboxGipSnapshot != null && xboxGipSnapshot.Count > 0)
-                {
-                    BpmLog.WriteLine(
-                        "[Xbox] Invoking Xbox GIP power-off service after Big Picture exit (cached "
-                            + xboxGipSnapshot.Count
-                            + " controller id(s))."
-                    );
-                    XboxGipPowerOff.PowerOffViaEphemeralService(-1, xboxGipSnapshot);
-                }
-                else
-                {
-                    BpmLog.WriteLine(
-                        "[Xbox] Invoking Xbox GIP power-off service after Big Picture exit (discovery in service)."
-                    );
-                    XboxGipPowerOff.PowerOffViaEphemeralService();
-                }
-            }
-            catch (Exception ex)
-            {
-                BpmLog.WriteLine("[Error] [Xbox] Xbox GIP power off failed: " + ex.Message);
             }
         }
 
@@ -188,15 +156,28 @@ namespace BigPictureManager
         }
 
         /// <summary>
-        /// Discovers Xbox GIP controller IDs when Big Picture opens, dims the guide LED, and caches IDs for exit handling.
+        /// Re-discovers Xbox GIP controllers, dims their guide LED and caches the IDs. Called when Big
+        /// Picture opens and again whenever a device connects/disconnects during the session, so a
+        /// controller that is powered off and on again gets re-dimmed. The active-session checks avoid
+        /// dimming after Big Picture has already closed (discovery takes a few seconds).
         /// </summary>
-        private void DiscoverXboxGipControllersForCurrentBpSession()
+        private void DiscoverAndDimXboxControllers()
         {
             _ = Task.Run(() =>
             {
                 try
                 {
+                    if (!_bigPictureActive)
+                    {
+                        return;
+                    }
+
                     var ids = XboxGipPowerOff.TryDiscoverGipControllers();
+                    if (!_bigPictureActive)
+                    {
+                        return;
+                    }
+
                     lock (_xboxGipIdsSync)
                     {
                         _xboxGipDeviceIdsFromLastBpOpen = ids.Count > 0 ? ids : null;
@@ -204,24 +185,41 @@ namespace BigPictureManager
 
                     if (ids.Count > 0)
                     {
-                        BpmLog.WriteLine(
-                            "[Xbox] Cached " + ids.Count + " controller id(s) for this Big Picture session."
-                        );
-                        BpmLog.WriteLine("[Xbox] Dimming guide-button LED to ~10% for Big Picture session.");
+                        BpmLog.WriteLine("[Xbox] Cached " + ids.Count + " controller id(s); dimming guide LED to ~10%.");
                         XboxGipPowerOff.TrySetLedBrightnessForAll(ids, XboxGipPowerOff.LedIntensityPercent10);
                     }
                     else
                     {
-                        BpmLog.WriteLine(
-                            "[Xbox] No controllers at Big Picture start (LED dim and exit actions skipped for this session)."
-                        );
+                        BpmLog.WriteLine("[Xbox] No controllers found for this Big Picture session.");
                     }
                 }
                 catch (Exception ex)
                 {
-                    BpmLog.WriteLine("[Error] [Xbox] Discovery at Big Picture start failed: " + ex.Message);
+                    BpmLog.WriteLine("[Error] [Xbox] Controller discovery/dim failed: " + ex.Message);
                 }
             });
+        }
+
+        private void OnDeviceChangedDuringSession(object sender, EventArgs e)
+        {
+            if (!_bigPictureActive)
+            {
+                return;
+            }
+
+            // Debounce: a single connect can raise several interface-arrival messages.
+            _xboxRedimTimer.Stop();
+            _xboxRedimTimer.Start();
+        }
+
+        private void OnXboxRedimTick(object sender, EventArgs e)
+        {
+            _xboxRedimTimer.Stop();
+            if (_bigPictureActive)
+            {
+                BpmLog.WriteLine("[Xbox] Device change during Big Picture; re-detecting controllers.");
+                DiscoverAndDimXboxControllers();
+            }
         }
     }
 }

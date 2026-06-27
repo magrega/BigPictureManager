@@ -17,9 +17,6 @@ namespace BigPictureManager
 
         internal const string SingleInstanceMutexPrefix = @"Local\BigPictureManager-";
 
-        /// <summary>Marks a process launched as a deliberate elevated restart so it bypasses the single-instance guard.</summary>
-        internal const string ElevatedRestartArg = "--elevated-restart";
-
         internal const string BigPictureWindowName = "Steam Big Picture Mode";
 
         internal const string ProjectReadmeUrl =

@@ -106,18 +106,36 @@ namespace BigPictureManager.Properties {
             }
         }
 
-        internal static string MenuAudioChooseDevice {
+        internal static string MenuHeaderControllerService {
             get {
-                return ResourceManager.GetString("MenuAudioChooseDevice", resourceCulture);
+                return ResourceManager.GetString("MenuHeaderControllerService", resourceCulture);
             }
         }
-        
-        internal static string MenuAudioLoading {
+
+        internal static string MenuSettings {
             get {
-                return ResourceManager.GetString("MenuAudioLoading", resourceCulture);
+                return ResourceManager.GetString("MenuSettings", resourceCulture);
             }
         }
-        
+
+        internal static string MenuBack {
+            get {
+                return ResourceManager.GetString("MenuBack", resourceCulture);
+            }
+        }
+
+        internal static string MenuInstallControllerService {
+            get {
+                return ResourceManager.GetString("MenuInstallControllerService", resourceCulture);
+            }
+        }
+
+        internal static string MenuRemoveControllerService {
+            get {
+                return ResourceManager.GetString("MenuRemoveControllerService", resourceCulture);
+            }
+        }
+
         internal static string MenuAudioNoDevices {
             get {
                 return ResourceManager.GetString("MenuAudioNoDevices", resourceCulture);
@@ -160,12 +178,6 @@ namespace BigPictureManager.Properties {
             }
         }
         
-        internal static string MenuPowerOffController {
-            get {
-                return ResourceManager.GetString("MenuPowerOffController", resourceCulture);
-            }
-        }
-        
         internal static string MenuWirelessXboxController {
             get {
                 return ResourceManager.GetString("MenuWirelessXboxController", resourceCulture);
@@ -177,70 +189,10 @@ namespace BigPictureManager.Properties {
                 return ResourceManager.GetString("MsgAlreadyRunning", resourceCulture);
             }
         }
-        
-        internal static string MsgCouldNotDetermineAppPath {
-            get {
-                return ResourceManager.GetString("MsgCouldNotDetermineAppPath", resourceCulture);
-            }
-        }
-        
+
         internal static string NotificationTitle {
             get {
                 return ResourceManager.GetString("NotificationTitle", resourceCulture);
-            }
-        }
-        
-        internal static string MsgRestartAsAdminFailed {
-            get {
-                return ResourceManager.GetString("MsgRestartAsAdminFailed", resourceCulture);
-            }
-        }
-        
-        internal static string MsgStartupTaskCreateFailed {
-            get {
-                return ResourceManager.GetString("MsgStartupTaskCreateFailed", resourceCulture);
-            }
-        }
-        
-        internal static string MsgStartupTaskRemoveFailed {
-            get {
-                return ResourceManager.GetString("MsgStartupTaskRemoveFailed", resourceCulture);
-            }
-        }
-        
-        internal static string TooltipBluetoothTurnOff {
-            get {
-                return ResourceManager.GetString("TooltipBluetoothTurnOff", resourceCulture);
-            }
-        }
-        
-        internal static string TooltipLaunchOnStart {
-            get {
-                return ResourceManager.GetString("TooltipLaunchOnStart", resourceCulture);
-            }
-        }
-        
-        internal static string TooltipNightLightBp {
-            get {
-                return ResourceManager.GetString("TooltipNightLightBp", resourceCulture);
-            }
-        }
-        
-        internal static string TooltipPauseMediaBp {
-            get {
-                return ResourceManager.GetString("TooltipPauseMediaBp", resourceCulture);
-            }
-        }
-        
-        internal static string TooltipXboxGipPowerOff {
-            get {
-                return ResourceManager.GetString("TooltipXboxGipPowerOff", resourceCulture);
-            }
-        }
-        
-        internal static string TooltipXboxGipRequestElevation {
-            get {
-                return ResourceManager.GetString("TooltipXboxGipRequestElevation", resourceCulture);
             }
         }
     }

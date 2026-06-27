@@ -11,41 +11,32 @@ namespace BigPictureManager
         {
             args = args ?? Array.Empty<string>();
 
-            if (
-                XboxGipPowerOff.TryParseServiceArgs(
-                    args,
-                    out var xboxPowerOffTargetIndex,
-                    out var xboxExplicitDeviceIds,
-                    out var xboxServiceLogDirectory
-                )
-            )
+            if (XboxGipPowerOff.TryParseServiceArgs(args, out var xboxServiceLogDirectory))
             {
                 // Point the SYSTEM service at the launching user's log directory before it logs anything.
                 BpmLog.UseLogDirectory(xboxServiceLogDirectory);
-                Environment.Exit(
-                    XboxGipPowerOff.RunServiceMode(xboxPowerOffTargetIndex, xboxExplicitDeviceIds)
-                );
+                Environment.Exit(XboxGipPowerOff.RunServiceMode());
                 return;
             }
 
-            // A deliberate elevated restart must take over from the instance that launched it, so it waits
-            // for that instance to exit and never treats itself as a duplicate.
-            var isElevatedRestart = Array.Exists(
-                args,
-                arg => string.Equals(arg, AppConstants.ElevatedRestartArg, StringComparison.OrdinalIgnoreCase)
-            );
-            if (isElevatedRestart)
+            // Elevated one-shot helpers: install/remove the persistent power-off service, then exit.
+            if (HasArg(args, XboxGipPowerOff.InstallServiceArg))
             {
-                BpmLog.WriteLine("[Main] Elevated restart launch; waiting for the previous instance to exit.");
-                SingleInstanceApplication.WaitForOtherInstancesToExit(TimeSpan.FromSeconds(5));
+                Environment.Exit(RunServiceManagement(install: true));
+                return;
+            }
+
+            if (HasArg(args, XboxGipPowerOff.UninstallServiceArg))
+            {
+                Environment.Exit(RunServiceManagement(install: false));
+                return;
             }
 
             var exePath = SingleInstanceApplication.GetExecutablePath();
             Mutex singleInstanceMutex = null;
             var ownsMutex = SingleInstanceApplication.TryAcquireMutex(out singleInstanceMutex, out var isMutexFirst);
             var isAnotherInstanceRunning = SingleInstanceApplication.IsAnotherInstanceRunningForCurrentUser();
-            var isDuplicateInstance =
-                !isElevatedRestart && ((ownsMutex && !isMutexFirst) || isAnotherInstanceRunning);
+            var isDuplicateInstance = (ownsMutex && !isMutexFirst) || isAnotherInstanceRunning;
 
             if (isDuplicateInstance)
             {
@@ -78,6 +69,31 @@ namespace BigPictureManager
                     singleInstanceMutex.ReleaseMutex();
                     singleInstanceMutex.Dispose();
                 }
+            }
+        }
+
+        private static bool HasArg(string[] args, string name) =>
+            Array.Exists(args, a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
+
+        private static int RunServiceManagement(bool install)
+        {
+            try
+            {
+                if (install)
+                {
+                    XboxGipPowerOff.InstallService();
+                }
+                else
+                {
+                    XboxGipPowerOff.UninstallService();
+                }
+
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                BpmLog.WriteLine("[Error] [Xbox] Service " + (install ? "install" : "uninstall") + " failed: " + ex.Message);
+                return 1;
             }
         }
     }

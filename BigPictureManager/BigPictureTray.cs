@@ -20,7 +20,6 @@ namespace BigPictureManager
         private ToolStripMenuItem _btMenuItem;
         private readonly BluetoothService _bluetooth = new BluetoothService();
         private bool _isTurnOffBt = Settings.Default.isTurnOffBT;
-        private bool _isAutoStart = Settings.Default.isAutoStart;
         private bool _isTurnOffNightLightOnBpStart = Settings.Default.isTurnOffNightLightOnBpStart;
         private bool _isPauseMediaOnBpStart = Settings.Default.isPauseMediaOnBpStart;
         private bool _restoreNightLightAfterBigPicture;
@@ -30,16 +29,30 @@ namespace BigPictureManager
         private ToolStripMenuItem _launchOnStartMenuItem;
         private readonly object _xboxGipIdsSync = new object();
         private List<ulong> _xboxGipDeviceIdsFromLastBpOpen;
+        private volatile bool _bigPictureActive;
+        private readonly DeviceArrivalWatcher _deviceWatcher = new DeviceArrivalWatcher();
+        private readonly System.Windows.Forms.Timer _xboxRedimTimer = new System.Windows.Forms.Timer { Interval = 1500 };
         private readonly NightLight _nightLight = new NightLight();
         private readonly AudioDeviceService _audio;
         private readonly System.Windows.Forms.Timer _persistTimer = new System.Windows.Forms.Timer { Interval = 300 };
         private AudioDevice _pendingAudioDevice;
+        private bool _xboxServiceInstalled;
+        private TrayMenuPage _menuPage = TrayMenuPage.Main;
+        private readonly System.Drawing.Bitmap _shieldIcon = System.Drawing.SystemIcons.Shield.ToBitmap();
+
+        private enum TrayMenuPage
+        {
+            Main,
+            Settings,
+        }
 
         public BigPictureTray()
         {
             _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
             _audio = new AudioDeviceService(_uiContext);
             _persistTimer.Tick += OnPersistTick;
+            _xboxRedimTimer.Tick += OnXboxRedimTick;
+            _deviceWatcher.Changed += OnDeviceChangedDuringSession;
             InitializeMenuModel();
             _trayIcon = new NotifyIcon
             {
@@ -48,6 +61,7 @@ namespace BigPictureManager
                 Text = Resources.AppTitle,
             };
             _trayIcon.MouseUp += OnTrayIconMouseUp;
+            _trayMenu.ContentBuilder = BuildMenuContent;
             // Populate the device list immediately and independently of Bluetooth: radio enumeration
             // (RequestAccessAsync/GetRadiosAsync) can take a while and must not delay the audio list.
             _audio.DevicesChanged += OnAudioDevicesChanged;
@@ -62,10 +76,7 @@ namespace BigPictureManager
                 ElevatedLogonStartupTask.RemoveLegacyStartupShortcut(exePath);
             }
 
-            SyncLaunchOnStartMenuState();
-            TryCompletePendingElevatedStartupTaskInstall();
-            TryCompletePendingElevatedStartupTaskUnregister();
-            TryCompletePendingXboxGipPowerOffEnable();
+            _ = Task.Run(MigrateLegacyStartupTask);
             LogApplicationStartup();
         }
 
@@ -133,7 +144,7 @@ namespace BigPictureManager
 
             _launchOnStartMenuItem = new ToolStripMenuItem(Resources.MenuLaunchOnStart)
             {
-                Checked = _isAutoStart,
+                Checked = StartupRegistration.IsEnabled(),
             };
         }
 
@@ -147,8 +158,10 @@ namespace BigPictureManager
 
         private void ShowTrayMenu()
         {
+            _menuPage = TrayMenuPage.Main;
+            _xboxServiceInstalled = XboxGipPowerOff.IsServiceInstalled();
             ApplyXboxGipPowerOffMenuState();
-            BuildTrayMenu();
+            SyncLaunchOnStartMenuState();
             _trayMenu.ShowAtCursor();
         }
 
@@ -176,9 +189,21 @@ namespace BigPictureManager
             }
         }
 
-        private void BuildTrayMenu()
+        private void BuildMenuContent()
         {
             _trayMenu.ClearRows();
+            if (_menuPage == TrayMenuPage.Settings)
+            {
+                BuildSettingsPage();
+            }
+            else
+            {
+                BuildMainPage();
+            }
+        }
+
+        private void BuildMainPage()
+        {
             _trayMenu.AddTitle(Resources.AppTitle);
             _trayMenu.AddSeparator();
 
@@ -243,8 +268,53 @@ namespace BigPictureManager
                 true,
                 () => Toggle(_launchOnStartMenuItem, OnLaunchOnStartMenuItemClick)
             );
-            _trayMenu.AddAction(TrayMenu.GlyphAbout, Resources.MenuAbout, () => OnAboutMenuItemClick(this, EventArgs.Empty));
+            _trayMenu.AddNavigation(TrayMenu.GlyphSettings, Resources.MenuSettings, () => _menuPage = TrayMenuPage.Settings);
             _trayMenu.AddAction(TrayMenu.GlyphExit, Resources.MenuExit, () => OnExit(this, EventArgs.Empty));
+        }
+
+        private void BuildSettingsPage()
+        {
+            _trayMenu.AddTitle(Resources.MenuSettings);
+            _trayMenu.AddNavigation(TrayMenu.GlyphBack, Resources.MenuBack, () => _menuPage = TrayMenuPage.Main);
+            _trayMenu.AddSeparator();
+
+            _trayMenu.AddHeader(Resources.MenuHeaderControllerService);
+            _trayMenu.AddActionImage(
+                _shieldIcon,
+                _xboxServiceInstalled ? Resources.MenuRemoveControllerService : Resources.MenuInstallControllerService,
+                InstallOrRemoveXboxService
+            );
+
+            _trayMenu.AddSeparator();
+            _trayMenu.AddAction(TrayMenu.GlyphAbout, Resources.MenuAbout, () => OnAboutMenuItemClick(this, EventArgs.Empty));
+        }
+
+        /// <summary>Launches the elevated one-shot helper to install or remove the global power-off service.</summary>
+        private void InstallOrRemoveXboxService()
+        {
+            var install = !XboxGipPowerOff.IsServiceInstalled();
+            var arg = install ? XboxGipPowerOff.InstallServiceArg : XboxGipPowerOff.UninstallServiceArg;
+            try
+            {
+                Process.Start(
+                    new ProcessStartInfo
+                    {
+                        FileName = Application.ExecutablePath,
+                        Arguments = arg,
+                        UseShellExecute = true,
+                        Verb = "runas",
+                    }
+                );
+                BpmLog.WriteLine("[Xbox] Requested " + (install ? "install" : "removal") + " of power-off service (elevated).");
+            }
+            catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == AppConstants.UacCancelledWin32Error)
+            {
+                BpmLog.WriteLine("[Xbox] Service management UAC prompt dismissed.");
+            }
+            catch (Exception ex)
+            {
+                BpmLog.WriteLine("[Error] [Xbox] Could not launch service management: " + ex.Message);
+            }
         }
 
         /// <summary>Flips the backing item's checked state and runs its existing handler.</summary>
@@ -293,28 +363,18 @@ namespace BigPictureManager
             _persistTimer.Dispose();
             Settings.Default.Save();
 
+            _xboxRedimTimer.Stop();
+            _xboxRedimTimer.Dispose();
+            _deviceWatcher.Dispose();
             _bpWatcher.Dispose();
             _audio.Dispose();
             BpmLog.WriteLine("[Main] App exit requested.");
 
             _trayMenu.Dispose();
+            _shieldIcon.Dispose();
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             Application.Exit();
-        }
-
-        private void RequestElevatedRestart(
-            string logMessage,
-            Action onUacCancelled = null,
-            Action onRestartFailed = null
-        )
-        {
-            ElevatedProcessLauncher.RestartElevated(
-                logMessage,
-                () => OnExit(this, EventArgs.Empty),
-                onUacCancelled,
-                onRestartFailed
-            );
         }
     }
 }

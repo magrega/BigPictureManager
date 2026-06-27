@@ -50,60 +50,12 @@ namespace BigPictureManager.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool isAutoStart {
-            get {
-                return ((bool)(this["isAutoStart"]));
-            }
-            set {
-                this["isAutoStart"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool pendingInstallElevatedStartupTask {
-            get {
-                return ((bool)(this["pendingInstallElevatedStartupTask"]));
-            }
-            set {
-                this["pendingInstallElevatedStartupTask"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool pendingUnregisterElevatedStartupTask {
-            get {
-                return ((bool)(this["pendingUnregisterElevatedStartupTask"]));
-            }
-            set {
-                this["pendingUnregisterElevatedStartupTask"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool isPowerOffXboxGipOnBpClose {
             get {
                 return ((bool)(this["isPowerOffXboxGipOnBpClose"]));
             }
             set {
                 this["isPowerOffXboxGipOnBpClose"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool pendingEnableXboxGipPowerOff {
-            get {
-                return ((bool)(this["pendingEnableXboxGipPowerOff"]));
-            }
-            set {
-                this["pendingEnableXboxGipPowerOff"] = value;
             }
         }
         

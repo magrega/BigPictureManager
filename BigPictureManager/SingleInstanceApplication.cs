@@ -39,26 +39,6 @@ namespace BigPictureManager
             return IsAnotherInstanceRunningForCurrentUser(log: true);
         }
 
-        /// <summary>
-        /// Waits until no other same-session instance is running, or the timeout elapses. Used by an
-        /// elevated restart to let the previous (non-elevated) instance exit before it takes over.
-        /// </summary>
-        internal static void WaitForOtherInstancesToExit(TimeSpan timeout)
-        {
-            var deadline = DateTime.UtcNow + timeout;
-            while (DateTime.UtcNow < deadline)
-            {
-                if (!IsAnotherInstanceRunningForCurrentUser(log: false))
-                {
-                    return;
-                }
-
-                Thread.Sleep(100);
-            }
-
-            BpmLog.WriteLine("[Main] Previous instance still present after wait; elevated restart proceeding anyway.");
-        }
-
         private static bool IsAnotherInstanceRunningForCurrentUser(bool log)
         {
             var current = Process.GetCurrentProcess();

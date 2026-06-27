@@ -139,11 +139,20 @@
   <data name="MenuHeaderApp" xml:space="preserve">
     <value>APPLICATION</value>
   </data>
-  <data name="MenuAudioChooseDevice" xml:space="preserve">
-    <value>Choose Audio Device</value>
+  <data name="MenuHeaderControllerService" xml:space="preserve">
+    <value>CONTROLLER SERVICE</value>
   </data>
-  <data name="MenuAudioLoading" xml:space="preserve">
-    <value>Loading audio devices...</value>
+  <data name="MenuSettings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="MenuBack" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="MenuInstallControllerService" xml:space="preserve">
+    <value>Install Xbox poweroff service</value>
+  </data>
+  <data name="MenuRemoveControllerService" xml:space="preserve">
+    <value>Remove Xbox poweroff service</value>
   </data>
   <data name="MenuAudioNoDevices" xml:space="preserve">
     <value>No playback devices found</value>
@@ -166,48 +175,13 @@
   <data name="MenuPauseMedia" xml:space="preserve">
     <value>Pause media</value>
   </data>
-  <data name="MenuPowerOffController" xml:space="preserve">
-    <value>Power Off Controller</value>
-  </data>
   <data name="MenuWirelessXboxController" xml:space="preserve">
     <value>Wireless Xbox Controller</value>
   </data>
   <data name="MsgAlreadyRunning" xml:space="preserve">
     <value>Big Picture Manager is already running!</value>
   </data>
-  <data name="MsgCouldNotDetermineAppPath" xml:space="preserve">
-    <value>Could not determine the application path.</value>
-  </data>
   <data name="NotificationTitle" xml:space="preserve">
     <value>Big Picture Manager</value>
-  </data>
-  <data name="MsgRestartAsAdminFailed" xml:space="preserve">
-    <value>Could not restart as administrator: {0}</value>
-  </data>
-  <data name="MsgStartupTaskCreateFailed" xml:space="preserve">
-    <value>Could not create the startup task:
-{0}</value>
-  </data>
-  <data name="MsgStartupTaskRemoveFailed" xml:space="preserve">
-    <value>Could not remove the startup task:
-{0}</value>
-  </data>
-  <data name="TooltipBluetoothTurnOff" xml:space="preserve">
-    <value>Turn off Bluetooth on Big Picture exit</value>
-  </data>
-  <data name="TooltipLaunchOnStart" xml:space="preserve">
-    <value>Run at sign-in with admin rights</value>
-  </data>
-  <data name="TooltipNightLightBp" xml:space="preserve">
-    <value>Disable Windows Night Light when Steam Big Picture opens, then restore it when Big Picture closes</value>
-  </data>
-  <data name="TooltipPauseMediaBp" xml:space="preserve">
-    <value>Pause media on BP start</value>
-  </data>
-  <data name="TooltipXboxGipPowerOff" xml:space="preserve">
-    <value>Power off Xbox wireless controllers (XboxGIP) when Steam Big Picture closes</value>
-  </data>
-  <data name="TooltipXboxGipRequestElevation" xml:space="preserve">
-    <value>Click to restart as administrator and enable Xbox controller power-off</value>
   </data>
 </root>
