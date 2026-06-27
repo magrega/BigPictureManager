@@ -52,7 +52,7 @@ namespace BigPictureManager
             // restored on exit), not when the user picks a device here.
             _selectedDevice = device;
             Settings.Default.LastAudioDeviceId = device.Id;
-            SchedulePersist();
+            Settings.Default.Save();
         }
     }
 }

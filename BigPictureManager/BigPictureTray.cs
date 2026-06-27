@@ -34,7 +34,6 @@ namespace BigPictureManager
         private readonly System.Windows.Forms.Timer _xboxRedimTimer = new System.Windows.Forms.Timer { Interval = 1500 };
         private readonly NightLight _nightLight = new NightLight();
         private readonly AudioDeviceService _audio;
-        private readonly System.Windows.Forms.Timer _persistTimer = new System.Windows.Forms.Timer { Interval = 300 };
         private bool _xboxServiceInstalled;
         private TrayMenuPage _menuPage = TrayMenuPage.Main;
         private readonly System.Drawing.Bitmap _shieldIcon = System.Drawing.SystemIcons.Shield.ToBitmap();
@@ -49,7 +48,6 @@ namespace BigPictureManager
         {
             _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
             _audio = new AudioDeviceService(_uiContext);
-            _persistTimer.Tick += OnPersistTick;
             _xboxRedimTimer.Tick += OnXboxRedimTick;
             _deviceWatcher.Changed += OnDeviceChangedDuringSession;
             InitializeMenuModel();
@@ -138,23 +136,6 @@ namespace BigPictureManager
             ApplyXboxGipPowerOffMenuState();
             SyncLaunchOnStartMenuState();
             _trayMenu.ShowAtCursor();
-        }
-
-        /// <summary>
-        /// Restarts the debounce window. Settings are kept in memory immediately (so behaviour is correct
-        /// at once); the disk write is coalesced and applied after a short idle, so rapid toggling stays
-        /// snappy and doesn't thrash the disk.
-        /// </summary>
-        private void SchedulePersist()
-        {
-            _persistTimer.Stop();
-            _persistTimer.Start();
-        }
-
-        private void OnPersistTick(object sender, EventArgs e)
-        {
-            _persistTimer.Stop();
-            Settings.Default.Save();
         }
 
         private void BuildMenuContent()
@@ -296,21 +277,21 @@ namespace BigPictureManager
         {
             _isTurnOffBt = _btMenuItem.Checked;
             Settings.Default.isTurnOffBT = _isTurnOffBt;
-            SchedulePersist();
+            Settings.Default.Save();
         }
 
         private void OnNightLightBpMenuItemClick(object sender, EventArgs e)
         {
             _isTurnOffNightLightOnBpStart = _nightLightBpMenuItem.Checked;
             Settings.Default.isTurnOffNightLightOnBpStart = _isTurnOffNightLightOnBpStart;
-            SchedulePersist();
+            Settings.Default.Save();
         }
 
         private void OnPauseMediaBpMenuItemClick(object sender, EventArgs e)
         {
             _isPauseMediaOnBpStart = _pauseMediaBpMenuItem.Checked;
             Settings.Default.isPauseMediaOnBpStart = _isPauseMediaOnBpStart;
-            SchedulePersist();
+            Settings.Default.Save();
         }
 
         private void OnAboutMenuItemClick(object sender, EventArgs e)
@@ -326,11 +307,6 @@ namespace BigPictureManager
 
         private void OnExit(object sender, EventArgs e)
         {
-            // Flush any debounced settings change before tearing down.
-            _persistTimer.Stop();
-            _persistTimer.Dispose();
-            Settings.Default.Save();
-
             _xboxRedimTimer.Stop();
             _xboxRedimTimer.Dispose();
             _deviceWatcher.Dispose();

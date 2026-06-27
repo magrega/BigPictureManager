@@ -22,7 +22,7 @@ namespace BigPictureManager
         private void OnXboxGipPowerOffMenuItemClick(object sender, EventArgs e)
         {
             Settings.Default.isPowerOffXboxGipOnBpClose = _xboxGipPowerOffMenuItem.Checked;
-            SchedulePersist();
+            Settings.Default.Save();
             BpmLog.WriteLine(
                 "[Xbox] Wireless controller power-off "
                     + (_xboxGipPowerOffMenuItem.Checked ? "enabled" : "disabled")
