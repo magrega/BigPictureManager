@@ -48,11 +48,10 @@ namespace BigPictureManager
 
         private void SelectAudioDevice(AudioDevice device)
         {
-            // Update state in memory now (the menu already shows the new selection); persist the setting
-            // and apply the actual device switch debounced, so rapid selection doesn't thrash the device.
+            // Only remember the preference; the system default is changed at Big Picture start (and
+            // restored on exit), not when the user picks a device here.
             _selectedDevice = device;
             Settings.Default.LastAudioDeviceId = device.Id;
-            _pendingAudioDevice = device;
             SchedulePersist();
         }
     }

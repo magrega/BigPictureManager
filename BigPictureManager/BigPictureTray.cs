@@ -35,7 +35,6 @@ namespace BigPictureManager
         private readonly NightLight _nightLight = new NightLight();
         private readonly AudioDeviceService _audio;
         private readonly System.Windows.Forms.Timer _persistTimer = new System.Windows.Forms.Timer { Interval = 300 };
-        private AudioDevice _pendingAudioDevice;
         private bool _xboxServiceInstalled;
         private TrayMenuPage _menuPage = TrayMenuPage.Main;
         private readonly System.Drawing.Bitmap _shieldIcon = System.Drawing.SystemIcons.Shield.ToBitmap();
@@ -167,8 +166,8 @@ namespace BigPictureManager
 
         /// <summary>
         /// Restarts the debounce window. Settings are kept in memory immediately (so behaviour is correct
-        /// at once); the disk write and any pending audio switch are coalesced and applied after a short
-        /// idle, so rapid toggling stays snappy and doesn't thrash the disk or audio device.
+        /// at once); the disk write is coalesced and applied after a short idle, so rapid toggling stays
+        /// snappy and doesn't thrash the disk.
         /// </summary>
         private void SchedulePersist()
         {
@@ -180,13 +179,6 @@ namespace BigPictureManager
         {
             _persistTimer.Stop();
             Settings.Default.Save();
-
-            var device = _pendingAudioDevice;
-            _pendingAudioDevice = null;
-            if (device != null)
-            {
-                _ = Task.Run(() => _audio.SetDefault(device, "tray menu selection"));
-            }
         }
 
         private void BuildMenuContent()
