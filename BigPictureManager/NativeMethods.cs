@@ -7,10 +7,8 @@ namespace BigPictureManager
     {
         internal const int WM_APPCOMMAND = 0x0319;
 
-        // APPCOMMAND codes (passed in the high word of lParam, i.e. value << 16).
-        internal const int APPCOMMAND_MEDIA_PLAY_PAUSE = 14;
+        // APPCOMMAND code passed in the high word of lParam (value << 16).
         internal const int APPCOMMAND_MEDIA_PAUSE = 47;
-        internal const int APPCOMMAND_MEDIA_STOP = 13;
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]

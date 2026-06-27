@@ -19,9 +19,9 @@ TO-DO:
 12. ~~Adapt UI for 2K+ screens~~
 13. ~~Set autostart as admin~~
 14. ~~Dim Xbox Controller LED~~
-15. Change audio only when BP is on TV
-16. ~~Move xbox power off functionality into a separate service~~
-17. ~~Allow only one instance of BPM per user~~
+15. ~~Move xbox power off functionality into a separate service~~
+16. ~~Allow only one instance of BPM per user~~
+17. Change audio only when BP is on TV
 18. Make it not trigger ms defender?
 19. Refactor the whole thing since C# is not my strong suit
 

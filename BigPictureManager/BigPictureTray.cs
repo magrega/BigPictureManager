@@ -69,13 +69,6 @@ namespace BigPictureManager
             _bpWatcher.Opened += OnBigPictureOpened;
             _bpWatcher.Closed += OnBigPictureClosed;
             _bpWatcher.Start();
-            var exePath = Application.ExecutablePath;
-            if (!string.IsNullOrEmpty(exePath))
-            {
-                ElevatedLogonStartupTask.RemoveLegacyStartupShortcut(exePath);
-            }
-
-            _ = Task.Run(MigrateLegacyStartupTask);
             LogApplicationStartup();
         }
 
@@ -86,23 +79,6 @@ namespace BigPictureManager
                     ? "[Main] Application started with administrator rights."
                     : "[Main] Application started without administrator rights."
             );
-
-            // GIP discovery blocks ~5s when no controller is connected (16 read attempts x 300ms).
-            // Run it off the UI thread so the tray menu responds immediately — this is diagnostics only.
-            _ = Task.Run(() =>
-            {
-                try
-                {
-                    var ids = XboxGipPowerOff.TryDiscoverGipControllers();
-                    BpmLog.WriteLine(
-                        "[Xbox] At startup: found " + ids.Count + " wireless Xbox controller(s) (GIP enumeration)."
-                    );
-                }
-                catch (Exception ex)
-                {
-                    BpmLog.WriteLine("[Error] [Xbox] Startup controller enumeration failed: " + ex.Message);
-                }
-            });
         }
 
         private async void InitializeBluetoothAsync()

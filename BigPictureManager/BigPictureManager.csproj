@@ -102,7 +102,6 @@
     <Compile Include="BigPictureTray.XboxGip.cs" />
     <Compile Include="BpmLog.cs" />
     <Compile Include="DeviceArrivalWatcher.cs" />
-    <Compile Include="ElevatedLogonStartupTask.cs" />
     <Compile Include="StartupRegistration.cs" />
     <Compile Include="NativeAudioApi.cs" />
     <Compile Include="NativeMethods.cs" />
