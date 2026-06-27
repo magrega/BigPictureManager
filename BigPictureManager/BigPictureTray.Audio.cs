@@ -1,6 +1,6 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Forms;
 using BigPictureManager.Properties;
 using static BigPictureManager.NativeAudioApi;
 
@@ -8,94 +8,52 @@ namespace BigPictureManager
 {
     internal sealed partial class BigPictureTray
     {
-        private void ApplyAudioDevicesToMenu(List<AudioDevice> deviceItems)
+        /// <summary>Latest snapshot of active playback devices, used to build the tray menu on demand.</summary>
+        private List<AudioDevice> _audioDevices = new List<AudioDevice>();
+
+        private void OnAudioDevicesChanged(List<AudioDevice> devices)
         {
-            // Dispose the previously built drop-down so its items and Click handlers don't leak
-            // on every device-change refresh.
-            var previousDropDown = _audioMenuItem.HasDropDownItems ? _audioMenuItem.DropDown : null;
-
-            if (deviceItems.Count == 0)
-            {
-                _audioMenuItem.Text = Resources.MenuAudioNoDevices;
-                _audioMenuItem.Enabled = false;
-                _audioMenuItem.DropDown = null;
-            }
-            else
-            {
-                _audioMenuItem.Text = Resources.MenuAudioChooseDevice;
-                _audioMenuItem.Enabled = true;
-                _audioMenuItem.DropDown = CreateAudioMenu(deviceItems);
-            }
-
-            previousDropDown?.Dispose();
+            _audioDevices = devices ?? new List<AudioDevice>();
+            ResolveSelectedDevice();
         }
 
-        private ContextMenuStrip CreateAudioMenu(List<AudioDevice> deviceItems)
+        /// <summary>
+        /// Picks the device the menu shows as selected: the saved one if still present, otherwise a TV
+        /// device if any, otherwise the current system default.
+        /// </summary>
+        private void ResolveSelectedDevice()
         {
-            var menu = new ContextMenuStrip();
-
-            // Materialize once: a deferred Select() would re-create items (and re-attach handlers)
-            // on every enumeration.
-            var audioListItems = deviceItems
-                .Select(device =>
-                {
-                    var item = new ToolStripMenuItem(device.Name) { Tag = device };
-
-                    item.Click += (sender, e) =>
-                    {
-                        _selectedDevice = (AudioDevice)((ToolStripMenuItem)sender).Tag;
-                        Settings.Default.LastAudioDeviceId = _selectedDevice.Id;
-                        Settings.Default.Save();
-                        UpdateDeviceCheckmarks(_selectedDevice, menu);
-                        _audio.SetDefault(_selectedDevice, "tray menu selection");
-                    };
-
-                    return item;
-                })
-                .ToList();
-
-            menu.Items.AddRange(audioListItems.Cast<ToolStripItem>().ToArray());
+            if (_audioDevices.Count == 0)
+            {
+                _selectedDevice = null;
+                return;
+            }
 
             var lastDeviceId = Settings.Default.LastAudioDeviceId;
-            var lastDeviceItem = string.IsNullOrEmpty(lastDeviceId)
-                ? null
-                : audioListItems.FirstOrDefault(i => ((AudioDevice)i.Tag).Id == lastDeviceId);
-
-            if (lastDeviceItem != null)
+            if (!string.IsNullOrEmpty(lastDeviceId))
             {
-                _selectedDevice = (AudioDevice)lastDeviceItem.Tag;
-                UpdateDeviceCheckmarks(_selectedDevice, menu);
-            }
-            else
-            {
-                SetDefaultAudio(menu, audioListItems);
+                var saved = _audioDevices.FirstOrDefault(d => d.Id == lastDeviceId);
+                if (saved != null)
+                {
+                    _selectedDevice = saved;
+                    return;
+                }
             }
 
-            return menu;
+            var tvDevice = _audioDevices.FirstOrDefault(
+                d => d.Name.IndexOf("TV", StringComparison.OrdinalIgnoreCase) >= 0
+            );
+            _selectedDevice = tvDevice ?? _audio.GetCurrentDefault() ?? _audioDevices[0];
         }
 
-        private void UpdateDeviceCheckmarks(AudioDevice selectedDevice, ContextMenuStrip menu)
+        private void SelectAudioDevice(AudioDevice device)
         {
-            foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
-            {
-                item.Checked = (item.Tag as AudioDevice)?.Id == selectedDevice?.Id;
-            }
-        }
-
-        private void SetDefaultAudio(ContextMenuStrip menu, IEnumerable<ToolStripMenuItem> audioListItems)
-        {
-            var tvDevice = audioListItems.FirstOrDefault(d => d.Text.Contains("TV"));
-
-            if (tvDevice != null)
-            {
-                _selectedDevice = (AudioDevice)tvDevice.Tag;
-                UpdateDeviceCheckmarks(_selectedDevice, menu);
-            }
-            else
-            {
-                _selectedDevice = _audio.GetCurrentDefault();
-                UpdateDeviceCheckmarks(_selectedDevice, menu);
-            }
+            // Update state in memory now (the menu already shows the new selection); persist the setting
+            // and apply the actual device switch debounced, so rapid selection doesn't thrash the device.
+            _selectedDevice = device;
+            Settings.Default.LastAudioDeviceId = device.Id;
+            _pendingAudioDevice = device;
+            SchedulePersist();
         }
     }
 }

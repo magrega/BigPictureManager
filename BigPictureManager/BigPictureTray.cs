@@ -16,7 +16,7 @@ namespace BigPictureManager
         private AudioDevice _prevDevice;
         private AudioDevice _selectedDevice;
         private readonly NotifyIcon _trayIcon;
-        private ToolStripMenuItem _audioMenuItem;
+        private readonly TrayMenu _trayMenu = new TrayMenu();
         private ToolStripMenuItem _btMenuItem;
         private readonly BluetoothService _bluetooth = new BluetoothService();
         private bool _isTurnOffBt = Settings.Default.isTurnOffBT;
@@ -32,21 +32,25 @@ namespace BigPictureManager
         private List<ulong> _xboxGipDeviceIdsFromLastBpOpen;
         private readonly NightLight _nightLight = new NightLight();
         private readonly AudioDeviceService _audio;
+        private readonly System.Windows.Forms.Timer _persistTimer = new System.Windows.Forms.Timer { Interval = 300 };
+        private AudioDevice _pendingAudioDevice;
 
         public BigPictureTray()
         {
             _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
             _audio = new AudioDeviceService(_uiContext);
+            _persistTimer.Tick += OnPersistTick;
+            InitializeMenuModel();
             _trayIcon = new NotifyIcon
             {
                 Icon = Resources.TrayIcon,
                 Visible = true,
                 Text = Resources.AppTitle,
-                ContextMenuStrip = CreateMainMenu(),
             };
-            // Build the audio menu immediately and independently of Bluetooth: radio enumeration
+            _trayIcon.MouseUp += OnTrayIconMouseUp;
+            // Populate the device list immediately and independently of Bluetooth: radio enumeration
             // (RequestAccessAsync/GetRadiosAsync) can take a while and must not delay the audio list.
-            _audio.DevicesChanged += ApplyAudioDevicesToMenu;
+            _audio.DevicesChanged += OnAudioDevicesChanged;
             _audio.Start();
             InitializeBluetoothAsync();
             _bpWatcher.Opened += OnBigPictureOpened;
@@ -101,99 +105,174 @@ namespace BigPictureManager
             _btMenuItem.Enabled = isBtAvailable;
         }
 
-        private ContextMenuStrip CreateMainMenu()
+        /// <summary>
+        /// Creates the menu's state model. These <see cref="ToolStripMenuItem"/>s are never shown; they
+        /// hold checked/enabled/text state that the existing handlers read and write, while the custom
+        /// <see cref="TrayMenu"/> presents them. This keeps the elevation/startup/Xbox logic untouched.
+        /// </summary>
+        private void InitializeMenuModel()
         {
-            var menu = new ContextMenuStrip();
-            menu.Opening += (s, e) => ApplyXboxGipPowerOffMenuState();
-
-            _audioMenuItem = new ToolStripMenuItem(Resources.MenuAudioLoading) { Enabled = false };
-            var separatorMenuItem = new ToolStripSeparator();
             _btMenuItem = new ToolStripMenuItem
             {
                 Text = Resources.MenuBluetoothNoDevice,
                 Enabled = false,
-                CheckOnClick = true,
-                ToolTipText = Resources.TooltipBluetoothTurnOff,
             };
-            _btMenuItem.Click += OnBluetoothMenuItemClick;
 
-            _xboxGipPowerOffMenuItem = new ToolStripMenuItem(Resources.MenuWirelessXboxController)
-            {
-                CheckOnClick = true,
-                ToolTipText = Resources.TooltipXboxGipPowerOff,
-            };
-            _xboxGipPowerOffMenuItem.Click += OnXboxGipPowerOffMenuItemClick;
+            _xboxGipPowerOffMenuItem = new ToolStripMenuItem(Resources.MenuWirelessXboxController);
             ApplyXboxGipPowerOffMenuState();
 
             _nightLightBpMenuItem = new ToolStripMenuItem(Resources.MenuNightLightTurnOffOnBpStart)
             {
-                CheckOnClick = true,
                 Checked = _isTurnOffNightLightOnBpStart,
-                ToolTipText = Resources.TooltipNightLightBp,
             };
-            _nightLightBpMenuItem.Click += OnNightLightBpMenuItemClick;
 
             _pauseMediaBpMenuItem = new ToolStripMenuItem(Resources.MenuPauseMedia)
             {
-                CheckOnClick = true,
                 Checked = _isPauseMediaOnBpStart,
-                ToolTipText = Resources.TooltipPauseMediaBp,
             };
-            _pauseMediaBpMenuItem.Click += OnPauseMediaBpMenuItemClick;
-
-            var powerOffControllerMenuItem = new ToolStripMenuItem(Resources.MenuPowerOffController);
-            powerOffControllerMenuItem.DropDownItems.Add(_btMenuItem);
-            powerOffControllerMenuItem.DropDownItems.Add(_xboxGipPowerOffMenuItem);
 
             _launchOnStartMenuItem = new ToolStripMenuItem(Resources.MenuLaunchOnStart)
             {
-                CheckOnClick = true,
                 Checked = _isAutoStart,
-                ToolTipText = Resources.TooltipLaunchOnStart,
             };
-            _launchOnStartMenuItem.Click += OnLaunchOnStartMenuItemClick;
+        }
 
-            var aboutMenuItem = new ToolStripMenuItem(Resources.MenuAbout);
-            aboutMenuItem.Click += OnAboutMenuItemClick;
+        private void OnTrayIconMouseUp(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                ShowTrayMenu();
+            }
+        }
 
-            var exitMenuItem = new ToolStripMenuItem(Resources.MenuExit);
-            exitMenuItem.Click += OnExit;
+        private void ShowTrayMenu()
+        {
+            ApplyXboxGipPowerOffMenuState();
+            BuildTrayMenu();
+            _trayMenu.ShowAtCursor();
+        }
 
-            menu.Items.AddRange(
-                new ToolStripItem[]
+        /// <summary>
+        /// Restarts the debounce window. Settings are kept in memory immediately (so behaviour is correct
+        /// at once); the disk write and any pending audio switch are coalesced and applied after a short
+        /// idle, so rapid toggling stays snappy and doesn't thrash the disk or audio device.
+        /// </summary>
+        private void SchedulePersist()
+        {
+            _persistTimer.Stop();
+            _persistTimer.Start();
+        }
+
+        private void OnPersistTick(object sender, EventArgs e)
+        {
+            _persistTimer.Stop();
+            Settings.Default.Save();
+
+            var device = _pendingAudioDevice;
+            _pendingAudioDevice = null;
+            if (device != null)
+            {
+                _ = Task.Run(() => _audio.SetDefault(device, "tray menu selection"));
+            }
+        }
+
+        private void BuildTrayMenu()
+        {
+            _trayMenu.ClearRows();
+            _trayMenu.AddTitle(Resources.AppTitle);
+            _trayMenu.AddSeparator();
+
+            _trayMenu.AddHeader(Resources.MenuHeaderAudio);
+            if (_audioDevices.Count == 0)
+            {
+                _trayMenu.AddInfo(Resources.MenuAudioNoDevices);
+            }
+            else
+            {
+                foreach (var device in _audioDevices)
                 {
-                    _audioMenuItem,
-                    separatorMenuItem,
-                    _nightLightBpMenuItem,
-                    _pauseMediaBpMenuItem,
-                    powerOffControllerMenuItem,
-                    _launchOnStartMenuItem,
-                    aboutMenuItem,
-                    exitMenuItem,
+                    var captured = device;
+                    _trayMenu.AddRadio(
+                        device.Name,
+                        device.Id == _selectedDevice?.Id,
+                        () => SelectAudioDevice(captured)
+                    );
                 }
+            }
+
+            _trayMenu.AddSeparator();
+            _trayMenu.AddHeader(Resources.MenuHeaderOnBpStart);
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphNightLight,
+                Resources.MenuNightLightTurnOffOnBpStart,
+                _nightLightBpMenuItem.Checked,
+                true,
+                () => Toggle(_nightLightBpMenuItem, OnNightLightBpMenuItemClick)
             );
-            return menu;
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphPause,
+                Resources.MenuPauseMedia,
+                _pauseMediaBpMenuItem.Checked,
+                true,
+                () => Toggle(_pauseMediaBpMenuItem, OnPauseMediaBpMenuItemClick)
+            );
+
+            _trayMenu.AddSeparator();
+            _trayMenu.AddHeader(Resources.MenuHeaderOnBpExit);
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphController,
+                Resources.MenuWirelessXboxController,
+                _xboxGipPowerOffMenuItem.Checked,
+                _xboxGipPowerOffMenuItem.Enabled,
+                () => Toggle(_xboxGipPowerOffMenuItem, OnXboxGipPowerOffMenuItemClick)
+            );
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphBluetooth,
+                _btMenuItem.Text,
+                _btMenuItem.Checked,
+                _btMenuItem.Enabled,
+                () => Toggle(_btMenuItem, OnBluetoothMenuItemClick)
+            );
+
+            _trayMenu.AddSeparator();
+            _trayMenu.AddHeader(Resources.MenuHeaderApp);
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphStartup,
+                Resources.MenuLaunchOnStart,
+                _launchOnStartMenuItem.Checked,
+                true,
+                () => Toggle(_launchOnStartMenuItem, OnLaunchOnStartMenuItemClick)
+            );
+            _trayMenu.AddAction(TrayMenu.GlyphAbout, Resources.MenuAbout, () => OnAboutMenuItemClick(this, EventArgs.Empty));
+            _trayMenu.AddAction(TrayMenu.GlyphExit, Resources.MenuExit, () => OnExit(this, EventArgs.Empty));
+        }
+
+        /// <summary>Flips the backing item's checked state and runs its existing handler.</summary>
+        private static void Toggle(ToolStripMenuItem item, EventHandler handler)
+        {
+            item.Checked = !item.Checked;
+            handler(item, EventArgs.Empty);
         }
 
         private void OnBluetoothMenuItemClick(object sender, EventArgs e)
         {
             _isTurnOffBt = _btMenuItem.Checked;
             Settings.Default.isTurnOffBT = _isTurnOffBt;
-            Settings.Default.Save();
+            SchedulePersist();
         }
 
         private void OnNightLightBpMenuItemClick(object sender, EventArgs e)
         {
             _isTurnOffNightLightOnBpStart = _nightLightBpMenuItem.Checked;
             Settings.Default.isTurnOffNightLightOnBpStart = _isTurnOffNightLightOnBpStart;
-            Settings.Default.Save();
+            SchedulePersist();
         }
 
         private void OnPauseMediaBpMenuItemClick(object sender, EventArgs e)
         {
             _isPauseMediaOnBpStart = _pauseMediaBpMenuItem.Checked;
             Settings.Default.isPauseMediaOnBpStart = _isPauseMediaOnBpStart;
-            Settings.Default.Save();
+            SchedulePersist();
         }
 
         private void OnAboutMenuItemClick(object sender, EventArgs e)
@@ -209,10 +288,16 @@ namespace BigPictureManager
 
         private void OnExit(object sender, EventArgs e)
         {
+            // Flush any debounced settings change before tearing down.
+            _persistTimer.Stop();
+            _persistTimer.Dispose();
+            Settings.Default.Save();
+
             _bpWatcher.Dispose();
             _audio.Dispose();
             BpmLog.WriteLine("[Main] App exit requested.");
 
+            _trayMenu.Dispose();
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             Application.Exit();

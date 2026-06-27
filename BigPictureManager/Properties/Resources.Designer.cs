@@ -81,7 +81,31 @@ namespace BigPictureManager.Properties {
                 return ResourceManager.GetString("MenuAbout", resourceCulture);
             }
         }
-        
+
+        internal static string MenuHeaderAudio {
+            get {
+                return ResourceManager.GetString("MenuHeaderAudio", resourceCulture);
+            }
+        }
+
+        internal static string MenuHeaderOnBpStart {
+            get {
+                return ResourceManager.GetString("MenuHeaderOnBpStart", resourceCulture);
+            }
+        }
+
+        internal static string MenuHeaderOnBpExit {
+            get {
+                return ResourceManager.GetString("MenuHeaderOnBpExit", resourceCulture);
+            }
+        }
+
+        internal static string MenuHeaderApp {
+            get {
+                return ResourceManager.GetString("MenuHeaderApp", resourceCulture);
+            }
+        }
+
         internal static string MenuAudioChooseDevice {
             get {
                 return ResourceManager.GetString("MenuAudioChooseDevice", resourceCulture);

@@ -122,10 +122,22 @@
     <value>..\Resources\bpman3.ico;System.Drawing.Icon, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
   <data name="AppTitle" xml:space="preserve">
-    <value>Big Picture Audio Switcher</value>
+    <value>Big Picture Manager</value>
   </data>
   <data name="MenuAbout" xml:space="preserve">
     <value>About</value>
+  </data>
+  <data name="MenuHeaderAudio" xml:space="preserve">
+    <value>AUDIO OUTPUT</value>
+  </data>
+  <data name="MenuHeaderOnBpStart" xml:space="preserve">
+    <value>ON BIG PICTURE START</value>
+  </data>
+  <data name="MenuHeaderOnBpExit" xml:space="preserve">
+    <value>TURN OFF ON EXIT</value>
+  </data>
+  <data name="MenuHeaderApp" xml:space="preserve">
+    <value>APPLICATION</value>
   </data>
   <data name="MenuAudioChooseDevice" xml:space="preserve">
     <value>Choose Audio Device</value>
@@ -140,7 +152,7 @@
     <value>No Bluetooth available</value>
   </data>
   <data name="MenuBluetoothTurnOffOnBpClose" xml:space="preserve">
-    <value>Turn off Bluetooth on BP close</value>
+    <value>Bluetooth controller</value>
   </data>
   <data name="MenuExit" xml:space="preserve">
     <value>Exit</value>
@@ -149,7 +161,7 @@
     <value>Launch on system start</value>
   </data>
   <data name="MenuNightLightTurnOffOnBpStart" xml:space="preserve">
-    <value>Turn off Night Light on BP start</value>
+    <value>Turn off Night Light</value>
   </data>
   <data name="MenuPauseMedia" xml:space="preserve">
     <value>Pause media</value>

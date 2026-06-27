@@ -38,7 +38,7 @@ namespace BigPictureManager
             if (WindowsIdentityHelper.IsAdministrator())
             {
                 Settings.Default.isPowerOffXboxGipOnBpClose = _xboxGipPowerOffMenuItem.Checked;
-                Settings.Default.Save();
+                SchedulePersist();
                 BpmLog.WriteLine(
                     "[Xbox] Wireless controller power-off "
                         + (_xboxGipPowerOffMenuItem.Checked ? "enabled" : "disabled")

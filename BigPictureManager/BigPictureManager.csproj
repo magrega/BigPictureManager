@@ -110,6 +110,7 @@
     <Compile Include="ShellShortcutHelper.cs" />
     <Compile Include="SingleInstanceApplication.cs" />
     <Compile Include="SystemMediaPause.cs" />
+    <Compile Include="TrayMenu.cs" />
     <Compile Include="WindowsIdentityHelper.cs" />
     <Compile Include="XboxGipPowerOff.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
