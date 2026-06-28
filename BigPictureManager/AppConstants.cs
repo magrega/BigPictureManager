@@ -17,7 +17,11 @@ namespace BigPictureManager
 
         internal const string SingleInstanceMutexPrefix = @"Local\BigPictureManager-";
 
-        internal const string BigPictureWindowName = "Steam Big Picture Mode";
+        /// <summary>Substring matched (case-insensitively) against the opened window's UIA name.</summary>
+        internal const string BigPictureWindowNameFragment = "Big Picture";
+
+        /// <summary>The Big Picture window must belong to a Steam process; its name starts with this (steam.exe / steamwebhelper.exe).</summary>
+        internal const string SteamProcessNamePrefix = "steam";
 
         internal const string ProjectReadmeUrl =
             "https://github.com/magrega/BigPictureManager/blob/master/README.md";

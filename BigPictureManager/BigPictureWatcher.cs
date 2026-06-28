@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Windows.Automation;
 
 namespace BigPictureManager
@@ -56,10 +57,42 @@ namespace BigPictureManager
             try
             {
                 var element = sender as AutomationElement;
-                return element != null && element.Current.Name == AppConstants.BigPictureWindowName;
+                if (element == null)
+                {
+                    return false;
+                }
+
+                var name = element.Current.Name;
+                if (string.IsNullOrEmpty(name)
+                    || name.IndexOf(AppConstants.BigPictureWindowNameFragment, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return false;
+                }
+
+                // Guard against any other window that happens to contain "Big Picture" in its title
+                // (a text file, a browser tab, etc.): require it to belong to a Steam process.
+                return IsSteamWindow(element);
             }
             catch (ElementNotAvailableException)
             {
+                return false;
+            }
+        }
+
+        private static bool IsSteamWindow(AutomationElement element)
+        {
+            try
+            {
+                using (var process = Process.GetProcessById(element.Current.ProcessId))
+                {
+                    // Steam renders Big Picture in steamwebhelper.exe; allow steam.exe too so a Steam
+                    // version change in window ownership doesn't break detection.
+                    return process.ProcessName.StartsWith(AppConstants.SteamProcessNamePrefix, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch (Exception)
+            {
+                // Process already exited or not inspectable — don't claim it as Big Picture.
                 return false;
             }
         }
