@@ -82,5 +82,17 @@ namespace BigPictureManager.Properties {
                 this["isPauseMediaOnBpStart"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool isFocusGameOnGuideDoublePress {
+            get {
+                return ((bool)(this["isFocusGameOnGuideDoublePress"]));
+            }
+            set {
+                this["isFocusGameOnGuideDoublePress"] = value;
+            }
+        }
     }
 }

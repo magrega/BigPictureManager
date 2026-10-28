@@ -100,6 +100,18 @@ namespace BigPictureManager.Properties {
             }
         }
 
+        internal static string MenuHeaderController {
+            get {
+                return ResourceManager.GetString("MenuHeaderController", resourceCulture);
+            }
+        }
+
+        internal static string MenuFocusGameOnGuideDoublePress {
+            get {
+                return ResourceManager.GetString("MenuFocusGameOnGuideDoublePress", resourceCulture);
+            }
+        }
+
         internal static string MenuHeaderApp {
             get {
                 return ResourceManager.GetString("MenuHeaderApp", resourceCulture);

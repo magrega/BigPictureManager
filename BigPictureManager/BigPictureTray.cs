@@ -119,6 +119,8 @@ namespace BigPictureManager
             {
                 Checked = StartupRegistration.IsEnabled(),
             };
+
+            InitializeGameFocus();
         }
 
         private void OnTrayIconMouseUp(object sender, MouseEventArgs e)
@@ -206,6 +208,16 @@ namespace BigPictureManager
                 _btMenuItem.Checked,
                 _btMenuItem.Enabled,
                 () => Toggle(_btMenuItem, OnBluetoothMenuItemClick)
+            );
+
+            _trayMenu.AddSeparator();
+            _trayMenu.AddHeader(Resources.MenuHeaderController);
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphController,
+                Resources.MenuFocusGameOnGuideDoublePress,
+                _focusGameOnGuideMenuItem.Checked,
+                true,
+                () => Toggle(_focusGameOnGuideMenuItem, OnFocusGameOnGuideMenuItemClick)
             );
 
             _trayMenu.AddSeparator();
@@ -311,6 +323,7 @@ namespace BigPictureManager
             _xboxRedimTimer.Dispose();
             _deviceWatcher.Dispose();
             _bpWatcher.Dispose();
+            _guideWatcher.Dispose();
             _audio.Dispose();
             BpmLog.WriteLine("[Main] App exit requested.");
 

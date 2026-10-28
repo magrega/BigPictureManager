@@ -136,6 +136,12 @@
   <data name="MenuHeaderOnBpExit" xml:space="preserve">
     <value>TURN OFF ON EXIT</value>
   </data>
+  <data name="MenuHeaderController" xml:space="preserve">
+    <value>CONTROLLER</value>
+  </data>
+  <data name="MenuFocusGameOnGuideDoublePress" xml:space="preserve">
+    <value>Double Guide press focuses game</value>
+  </data>
   <data name="MenuHeaderApp" xml:space="preserve">
     <value>APPLICATION</value>
   </data>

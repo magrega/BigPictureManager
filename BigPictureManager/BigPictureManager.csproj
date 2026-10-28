@@ -96,12 +96,15 @@
     <Compile Include="BigPictureTray.Audio.cs" />
     <Compile Include="BigPictureTray.BigPictureSession.cs" />
     <Compile Include="BigPictureTray.cs" />
+    <Compile Include="BigPictureTray.GameFocus.cs" />
     <Compile Include="BigPictureWatcher.cs" />
     <Compile Include="BluetoothService.cs" />
     <Compile Include="BigPictureTray.Startup.cs" />
     <Compile Include="BigPictureTray.XboxGip.cs" />
     <Compile Include="BpmLog.cs" />
     <Compile Include="DeviceArrivalWatcher.cs" />
+    <Compile Include="GuideButtonWatcher.cs" />
+    <Compile Include="SteamGameFocuser.cs" />
     <Compile Include="StartupRegistration.cs" />
     <Compile Include="NativeAudioApi.cs" />
     <Compile Include="NativeMethods.cs" />
