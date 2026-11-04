@@ -62,7 +62,15 @@ namespace BigPictureManager
         private readonly List<Row> _rows = new List<Row>();
         private readonly Timer _animationTimer = new Timer { Interval = 15 };
         private readonly Stopwatch _animationClock = new Stopwatch();
+        private readonly ToolTip _toolTip = new ToolTip
+        {
+            ShowAlways = true,
+            InitialDelay = 400,
+            ReshowDelay = 100,
+            AutoPopDelay = 10000,
+        };
         private int _hoverIndex = -1;
+        private string _activeToolTip;
 
         /// <summary>Rebuilds the rows from current app state (used by ShowAtCursor and drill-down navigation).</summary>
         public Action ContentBuilder;
@@ -300,8 +308,7 @@ namespace BigPictureManager
             var textColor = row.Enabled ? TrayMenuTheme.ItemText : TrayMenuTheme.DisabledText;
             var iconColor = row.Enabled ? TrayMenuTheme.Accent : TrayMenuTheme.DisabledText;
 
-            var textLeft = rowRect.Left + Px(14);
-
+            var labelRect = GetLabelRect(row);
             if (row.IconImage != null)
             {
                 var iconSize = Px(18);
@@ -309,18 +316,14 @@ namespace BigPictureManager
                 var iy = rowRect.Top + (rowRect.Height - iconSize) / 2;
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 g.DrawImage(row.IconImage, new Rectangle(ix, iy, iconSize, iconSize));
-                textLeft = rowRect.Left + Px(42);
             }
             else if (!string.IsNullOrEmpty(row.Glyph))
             {
                 var iconRect = new Rectangle(rowRect.Left + Px(10), rowRect.Top, Px(24), rowRect.Height);
                 TextRenderer.DrawText(g, row.Glyph, _iconFont, iconRect, iconColor,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-                textLeft = rowRect.Left + Px(42);
             }
 
-            var rightReserve = row.Kind == RowKind.Toggle ? Px(46) : Px(28);
-            var labelRect = new Rectangle(textLeft, rowRect.Top, rowRect.Right - textLeft - rightReserve, rowRect.Height);
             TextRenderer.DrawText(g, row.Text, _textFont, labelRect, textColor, LabelFlags);
 
             if (row.Kind == RowKind.Toggle)
@@ -422,7 +425,10 @@ namespace BigPictureManager
         }
 
         private const TextFormatFlags LabelFlags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left
-            | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+            | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+
+        private const TextFormatFlags MeasureFlags = TextFormatFlags.Left
+            | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
@@ -434,16 +440,98 @@ namespace BigPictureManager
                 Cursor = index >= 0 ? Cursors.Hand : Cursors.Default;
                 Invalidate();
             }
+
+            UpdateTruncationToolTip(e.Y);
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
+            ClearTruncationToolTip();
             if (_hoverIndex != -1)
             {
                 _hoverIndex = -1;
                 Invalidate();
             }
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (!Visible)
+            {
+                ClearTruncationToolTip();
+            }
+        }
+
+        private void UpdateTruncationToolTip(int y)
+        {
+            var tip = GetTruncationToolTip(y);
+            if (string.Equals(tip, _activeToolTip, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _activeToolTip = tip;
+            _toolTip.SetToolTip(this, tip ?? string.Empty);
+        }
+
+        private void ClearTruncationToolTip()
+        {
+            if (_activeToolTip == null)
+            {
+                return;
+            }
+
+            _activeToolTip = null;
+            _toolTip.SetToolTip(this, string.Empty);
+            _toolTip.Hide(this);
+        }
+
+        /// <summary>Full label text when the drawn row is ellipsized; otherwise null.</summary>
+        private string GetTruncationToolTip(int y)
+        {
+            for (var i = 0; i < _rows.Count; i++)
+            {
+                var row = _rows[i];
+                if (!CanShowTruncationToolTip(row) || y < row.Top || y >= row.Top + row.Height)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(row.Text))
+                {
+                    return null;
+                }
+
+                var labelRect = GetLabelRect(row);
+                if (labelRect.Width <= 0)
+                {
+                    return null;
+                }
+
+                var needed = TextRenderer.MeasureText(row.Text, _textFont, new Size(int.MaxValue, labelRect.Height), MeasureFlags);
+                return needed.Width > labelRect.Width ? row.Text : null;
+            }
+
+            return null;
+        }
+
+        private static bool CanShowTruncationToolTip(Row row) =>
+            row.Kind == RowKind.Action || row.Kind == RowKind.Toggle || row.Kind == RowKind.Radio;
+
+        private Rectangle GetLabelRect(Row row)
+        {
+            var pad = Px(6);
+            var rowRect = new Rectangle(pad, row.Top, Width - 2 * pad, row.Height);
+            var textLeft = rowRect.Left + Px(14);
+            if (row.IconImage != null || !string.IsNullOrEmpty(row.Glyph))
+            {
+                textLeft = rowRect.Left + Px(42);
+            }
+
+            var rightReserve = row.Kind == RowKind.Toggle ? Px(46) : Px(28);
+            return new Rectangle(textLeft, rowRect.Top, Math.Max(0, rowRect.Right - textLeft - rightReserve), rowRect.Height);
         }
 
         // Handle MouseUp (not Click): rapid clicks are merged into a DoubleClick, for which Click never
@@ -512,6 +600,7 @@ namespace BigPictureManager
             ClampToScreen();
             var p = PointToClient(Cursor.Position);
             _hoverIndex = RowIndexAt(p.Y);
+            UpdateTruncationToolTip(p.Y);
             Invalidate();
         }
 
@@ -600,6 +689,7 @@ namespace BigPictureManager
             if (disposing)
             {
                 _animationTimer.Dispose();
+                _toolTip.Dispose();
                 DisposeFonts();
             }
 

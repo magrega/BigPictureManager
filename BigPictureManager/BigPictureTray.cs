@@ -274,14 +274,11 @@ namespace BigPictureManager
         {
             AddPageHeader(Resources.MenuSettings);
 
-            _trayMenu.AddHeader(Resources.MenuHeaderControllerService);
             _trayMenu.AddActionImage(
                 _shieldIcon,
                 _xboxServiceInstalled ? Resources.MenuRemoveControllerService : Resources.MenuInstallControllerService,
                 InstallOrRemoveXboxService
             );
-
-            _trayMenu.AddSeparator();
             _trayMenu.AddToggle(
                 TrayMenu.GlyphStartup,
                 Resources.MenuLaunchOnStart,
@@ -289,8 +286,12 @@ namespace BigPictureManager
                 true,
                 () => Toggle(_launchOnStartMenuItem, OnLaunchOnStartMenuItemClick)
             );
-
-            _trayMenu.AddSeparator();
+            _trayMenu.AddAction(
+                TrayMenu.GlyphDisplay,
+                Resources.MenuDisableSteamMonitorSwitch,
+                DisableSteamPreferredMonitor,
+                enabled: !_steamMonitorDisableBusy
+            );
             _trayMenu.AddAction(TrayMenu.GlyphAbout, Resources.MenuAbout, () => OnAboutMenuItemClick(this, EventArgs.Empty));
         }
 

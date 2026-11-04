@@ -208,6 +208,42 @@
   <data name="MsgDisplayDisconnected" xml:space="preserve">
     <value>{0} was disconnected during Big Picture.</value>
   </data>
+  <data name="MenuHeaderSteam" xml:space="preserve">
+    <value>STEAM</value>
+  </data>
+  <data name="MenuDisableSteamMonitorSwitch" xml:space="preserve">
+    <value>Disable Steam's monitor switch</value>
+  </data>
+  <data name="MsgSteamMonitorWorking" xml:space="preserve">
+    <value>Disabling Steam's monitor switch…</value>
+  </data>
+  <data name="MsgSteamMonitorFindingSteam" xml:space="preserve">
+    <value>Looking for Steam…</value>
+  </data>
+  <data name="MsgSteamMonitorReadingSetting" xml:space="preserve">
+    <value>Reading Steam's display setting…</value>
+  </data>
+  <data name="MsgSteamMonitorClosingSteam" xml:space="preserve">
+    <value>Closing Steam…</value>
+  </data>
+  <data name="MsgSteamMonitorEditingConfig" xml:space="preserve">
+    <value>Updating Steam settings…</value>
+  </data>
+  <data name="MsgSteamMonitorLaunchingSteam" xml:space="preserve">
+    <value>Launching Steam…</value>
+  </data>
+  <data name="MsgSteamMonitorDisabled" xml:space="preserve">
+    <value>Steam's monitor change has been disabled.</value>
+  </data>
+  <data name="MsgSteamMonitorAlreadyDisabled" xml:space="preserve">
+    <value>Steam's monitor change is already disabled.</value>
+  </data>
+  <data name="MsgSteamMonitorClearedButRelaunchFailed" xml:space="preserve">
+    <value>Steam's monitor change has been disabled, but Steam could not be relaunched.</value>
+  </data>
+  <data name="MsgSteamMonitorFailed" xml:space="preserve">
+    <value>Couldn't disable Steam's monitor switch: {0}</value>
+  </data>
   <data name="NotificationTitle" xml:space="preserve">
     <value>Big Picture Manager</value>
   </data>

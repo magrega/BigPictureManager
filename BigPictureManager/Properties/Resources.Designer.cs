@@ -214,6 +214,78 @@ namespace BigPictureManager.Properties {
             }
         }
 
+        internal static string MenuHeaderSteam {
+            get {
+                return ResourceManager.GetString("MenuHeaderSteam", resourceCulture);
+            }
+        }
+
+        internal static string MenuDisableSteamMonitorSwitch {
+            get {
+                return ResourceManager.GetString("MenuDisableSteamMonitorSwitch", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorWorking {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorWorking", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorFindingSteam {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorFindingSteam", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorReadingSetting {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorReadingSetting", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorClosingSteam {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorClosingSteam", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorEditingConfig {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorEditingConfig", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorLaunchingSteam {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorLaunchingSteam", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorDisabled {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorDisabled", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorAlreadyDisabled {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorAlreadyDisabled", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorClearedButRelaunchFailed {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorClearedButRelaunchFailed", resourceCulture);
+            }
+        }
+
+        internal static string MsgSteamMonitorFailed {
+            get {
+                return ResourceManager.GetString("MsgSteamMonitorFailed", resourceCulture);
+            }
+        }
+
         internal static string MenuDisplayDontChange {
             get {
                 return ResourceManager.GetString("MenuDisplayDontChange", resourceCulture);

@@ -107,7 +107,10 @@
     <Compile Include="DisplayTopology.cs" />
     <Compile Include="NativeDisplayConfigApi.cs" />
     <Compile Include="GuideButtonWatcher.cs" />
+    <Compile Include="ProgressOverlay.cs" />
     <Compile Include="SteamGameFocuser.cs" />
+    <Compile Include="SteamPreferredMonitor.cs" />
+    <Compile Include="BigPictureTray.Steam.cs" />
     <Compile Include="StartupRegistration.cs" />
     <Compile Include="NativeAudioApi.cs" />
     <Compile Include="NativeMethods.cs" />
