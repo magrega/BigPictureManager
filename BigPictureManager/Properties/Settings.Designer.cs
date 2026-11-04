@@ -94,5 +94,29 @@ namespace BigPictureManager.Properties {
                 this["isFocusGameOnGuideDoublePress"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string BpDisplayDevicePath {
+            get {
+                return ((string)(this["BpDisplayDevicePath"]));
+            }
+            set {
+                this["BpDisplayDevicePath"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string BpDisplayName {
+            get {
+                return ((string)(this["BpDisplayName"]));
+            }
+            set {
+                this["BpDisplayName"] = value;
+            }
+        }
     }
 }

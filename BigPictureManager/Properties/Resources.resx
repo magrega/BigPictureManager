@@ -127,23 +127,32 @@
   <data name="MenuAbout" xml:space="preserve">
     <value>About</value>
   </data>
-  <data name="MenuHeaderAudio" xml:space="preserve">
-    <value>AUDIO OUTPUT</value>
+  <data name="MenuAudio" xml:space="preserve">
+    <value>Audio</value>
   </data>
-  <data name="MenuHeaderOnBpStart" xml:space="preserve">
-    <value>ON BIG PICTURE START</value>
+  <data name="MenuDisplay" xml:space="preserve">
+    <value>Display</value>
   </data>
-  <data name="MenuHeaderOnBpExit" xml:space="preserve">
-    <value>TURN OFF ON EXIT</value>
+  <data name="MenuControllers" xml:space="preserve">
+    <value>Controllers</value>
   </data>
-  <data name="MenuHeaderController" xml:space="preserve">
-    <value>CONTROLLER</value>
+  <data name="MenuOnBpStart" xml:space="preserve">
+    <value>On Big Picture start</value>
+  </data>
+  <data name="MenuHeaderXbox" xml:space="preserve">
+    <value>XBOX CONTROLLER</value>
+  </data>
+  <data name="MenuHeaderBluetooth" xml:space="preserve">
+    <value>BLUETOOTH</value>
+  </data>
+  <data name="MenuXboxTurnOffOnExit" xml:space="preserve">
+    <value>Turn off on Big Picture exit</value>
+  </data>
+  <data name="MenuXboxPowerOffNow" xml:space="preserve">
+    <value>Power off now</value>
   </data>
   <data name="MenuFocusGameOnGuideDoublePress" xml:space="preserve">
     <value>Double Guide press focuses game</value>
-  </data>
-  <data name="MenuHeaderApp" xml:space="preserve">
-    <value>APPLICATION</value>
   </data>
   <data name="MenuHeaderControllerService" xml:space="preserve">
     <value>CONTROLLER SERVICE</value>
@@ -167,7 +176,7 @@
     <value>No Bluetooth available</value>
   </data>
   <data name="MenuBluetoothTurnOffOnBpClose" xml:space="preserve">
-    <value>Bluetooth controller</value>
+    <value>Turn off on Big Picture exit</value>
   </data>
   <data name="MenuExit" xml:space="preserve">
     <value>Exit</value>
@@ -181,11 +190,23 @@
   <data name="MenuPauseMedia" xml:space="preserve">
     <value>Pause media</value>
   </data>
-  <data name="MenuWirelessXboxController" xml:space="preserve">
-    <value>Wireless Xbox Controller</value>
-  </data>
   <data name="MsgAlreadyRunning" xml:space="preserve">
     <value>Big Picture Manager is already running!</value>
+  </data>
+  <data name="MenuDisplayDontChange" xml:space="preserve">
+    <value>Don't change</value>
+  </data>
+  <data name="MenuDisplayNotAvailable" xml:space="preserve">
+    <value>{0} (not available)</value>
+  </data>
+  <data name="MenuDisplayUnknownName" xml:space="preserve">
+    <value>Unknown display</value>
+  </data>
+  <data name="MsgDisplayNotAvailable" xml:space="preserve">
+    <value>{0} is not available. Big Picture opened on the current main display.</value>
+  </data>
+  <data name="MsgDisplayDisconnected" xml:space="preserve">
+    <value>{0} was disconnected during Big Picture.</value>
   </data>
   <data name="NotificationTitle" xml:space="preserve">
     <value>Big Picture Manager</value>

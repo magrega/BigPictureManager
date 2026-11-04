@@ -96,6 +96,7 @@
     <Compile Include="BigPictureTray.Audio.cs" />
     <Compile Include="BigPictureTray.BigPictureSession.cs" />
     <Compile Include="BigPictureTray.cs" />
+    <Compile Include="BigPictureTray.Display.cs" />
     <Compile Include="BigPictureTray.GameFocus.cs" />
     <Compile Include="BigPictureWatcher.cs" />
     <Compile Include="BluetoothService.cs" />
@@ -103,6 +104,8 @@
     <Compile Include="BigPictureTray.XboxGip.cs" />
     <Compile Include="BpmLog.cs" />
     <Compile Include="DeviceArrivalWatcher.cs" />
+    <Compile Include="DisplayTopology.cs" />
+    <Compile Include="NativeDisplayConfigApi.cs" />
     <Compile Include="GuideButtonWatcher.cs" />
     <Compile Include="SteamGameFocuser.cs" />
     <Compile Include="StartupRegistration.cs" />
@@ -114,6 +117,7 @@
     <Compile Include="SingleInstanceApplication.cs" />
     <Compile Include="SystemMediaPause.cs" />
     <Compile Include="TrayMenu.cs" />
+    <Compile Include="WindowLayout.cs" />
     <Compile Include="WindowsIdentityHelper.cs" />
     <Compile Include="XboxGipPowerOff.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

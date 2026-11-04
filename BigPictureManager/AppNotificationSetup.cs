@@ -47,18 +47,9 @@ namespace BigPictureManager
         {
             try
             {
-                var logoPath = GetNotificationLogoPath();
-                var logoUri = File.Exists(logoPath) ? new Uri(logoPath).AbsoluteUri : null;
-                var xml = BuildToastXml(Resources.MsgAlreadyRunning, logoUri);
-
-                var document = new XmlDocument();
-                document.LoadXml(xml);
-
-                var toast = new ToastNotification(document)
-                {
-                    Tag = AppConstants.AlreadyRunningToastTag,
-                    Group = AppConstants.AlreadyRunningToastGroup,
-                };
+                var toast = CreateToast(Resources.MsgAlreadyRunning);
+                toast.Tag = AppConstants.AlreadyRunningToastTag;
+                toast.Group = AppConstants.AlreadyRunningToastGroup;
 
                 var notifier = ToastNotificationManager.CreateToastNotifier(AppConstants.AppUserModelId);
                 notifier.Show(toast);
@@ -71,6 +62,35 @@ namespace BigPictureManager
             {
                 BpmLog.WriteLine("[Error] [Toast] Failed to show notification: " + ex.Message);
             }
+        }
+
+        /// <summary>Shows a toast with the given message. Failures are logged, not thrown.</summary>
+        internal static void ShowNotification(string message)
+        {
+            try
+            {
+                var notifier = ToastNotificationManager.CreateToastNotifier(AppConstants.AppUserModelId);
+                if (notifier.Setting != NotificationSetting.Enabled)
+                {
+                    BpmLog.WriteLine("[Toast] Windows reports notifications for this app as " + notifier.Setting + ".");
+                }
+
+                notifier.Show(CreateToast(message));
+                BpmLog.WriteLine("[Toast] Displayed notification: " + message);
+            }
+            catch (Exception ex)
+            {
+                BpmLog.WriteLine("[Error] [Toast] Failed to show notification: " + ex.Message);
+            }
+        }
+
+        private static ToastNotification CreateToast(string message)
+        {
+            var logoPath = GetNotificationLogoPath();
+            var logoUri = File.Exists(logoPath) ? new Uri(logoPath).AbsoluteUri : null;
+            var document = new XmlDocument();
+            document.LoadXml(BuildToastXml(message, logoUri));
+            return new ToastNotification(document);
         }
 
         private static void RemoveAlreadyRunningToastFromHistory()

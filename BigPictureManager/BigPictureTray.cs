@@ -41,6 +41,10 @@ namespace BigPictureManager
         private enum TrayMenuPage
         {
             Main,
+            Audio,
+            Display,
+            Controllers,
+            OnBpStart,
             Settings,
         }
 
@@ -102,7 +106,7 @@ namespace BigPictureManager
                 Enabled = false,
             };
 
-            _xboxGipPowerOffMenuItem = new ToolStripMenuItem(Resources.MenuWirelessXboxController);
+            _xboxGipPowerOffMenuItem = new ToolStripMenuItem(Resources.MenuXboxTurnOffOnExit);
             ApplyXboxGipPowerOffMenuState();
 
             _nightLightBpMenuItem = new ToolStripMenuItem(Resources.MenuNightLightTurnOffOnBpStart)
@@ -121,6 +125,7 @@ namespace BigPictureManager
             };
 
             InitializeGameFocus();
+            InitializeDisplaySwitching();
         }
 
         private void OnTrayIconMouseUp(object sender, MouseEventArgs e)
@@ -137,19 +142,33 @@ namespace BigPictureManager
             _xboxServiceInstalled = XboxGipPowerOff.IsServiceInstalled();
             ApplyXboxGipPowerOffMenuState();
             SyncLaunchOnStartMenuState();
+            RefreshDisplays();
             _trayMenu.ShowAtCursor();
         }
 
         private void BuildMenuContent()
         {
             _trayMenu.ClearRows();
-            if (_menuPage == TrayMenuPage.Settings)
+            switch (_menuPage)
             {
-                BuildSettingsPage();
-            }
-            else
-            {
-                BuildMainPage();
+                case TrayMenuPage.Audio:
+                    BuildAudioPage();
+                    break;
+                case TrayMenuPage.Display:
+                    BuildDisplayPage();
+                    break;
+                case TrayMenuPage.Controllers:
+                    BuildControllersPage();
+                    break;
+                case TrayMenuPage.OnBpStart:
+                    BuildOnBpStartPage();
+                    break;
+                case TrayMenuPage.Settings:
+                    BuildSettingsPage();
+                    break;
+                default:
+                    BuildMainPage();
+                    break;
             }
         }
 
@@ -157,8 +176,25 @@ namespace BigPictureManager
         {
             _trayMenu.AddTitle(Resources.AppTitle);
             _trayMenu.AddSeparator();
+            _trayMenu.AddSubmenu(TrayMenu.GlyphAudio, Resources.MenuAudio, () => _menuPage = TrayMenuPage.Audio);
+            _trayMenu.AddSubmenu(TrayMenu.GlyphDisplay, Resources.MenuDisplay, () => _menuPage = TrayMenuPage.Display);
+            _trayMenu.AddSubmenu(TrayMenu.GlyphController, Resources.MenuControllers, () => _menuPage = TrayMenuPage.Controllers);
+            _trayMenu.AddSubmenu(TrayMenu.GlyphPlay, Resources.MenuOnBpStart, () => _menuPage = TrayMenuPage.OnBpStart);
+            _trayMenu.AddSubmenu(TrayMenu.GlyphSettings, Resources.MenuSettings, () => _menuPage = TrayMenuPage.Settings);
+            _trayMenu.AddSeparator();
+            _trayMenu.AddAction(TrayMenu.GlyphExit, Resources.MenuExit, () => OnExit(this, EventArgs.Empty));
+        }
 
-            _trayMenu.AddHeader(Resources.MenuHeaderAudio);
+        private void AddPageHeader(string title)
+        {
+            _trayMenu.AddTitle(title);
+            _trayMenu.AddNavigation(TrayMenu.GlyphBack, Resources.MenuBack, () => _menuPage = TrayMenuPage.Main);
+            _trayMenu.AddSeparator();
+        }
+
+        private void BuildAudioPage()
+        {
+            AddPageHeader(Resources.MenuAudio);
             if (_audioDevices.Count == 0)
             {
                 _trayMenu.AddInfo(Resources.MenuAudioNoDevices);
@@ -175,9 +211,49 @@ namespace BigPictureManager
                     );
                 }
             }
+        }
+
+        private void BuildDisplayPage()
+        {
+            AddPageHeader(Resources.MenuDisplay);
+            BuildDisplaySection();
+        }
+
+        private void BuildControllersPage()
+        {
+            AddPageHeader(Resources.MenuControllers);
+
+            _trayMenu.AddHeader(Resources.MenuHeaderXbox);
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphController,
+                Resources.MenuFocusGameOnGuideDoublePress,
+                _focusGameOnGuideMenuItem.Checked,
+                true,
+                () => Toggle(_focusGameOnGuideMenuItem, OnFocusGameOnGuideMenuItemClick)
+            );
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphPowerOff,
+                _xboxGipPowerOffMenuItem.Text,
+                _xboxGipPowerOffMenuItem.Checked,
+                _xboxGipPowerOffMenuItem.Enabled,
+                () => Toggle(_xboxGipPowerOffMenuItem, OnXboxGipPowerOffMenuItemClick)
+            );
+            _trayMenu.AddAction(TrayMenu.GlyphPowerOff, Resources.MenuXboxPowerOffNow, PowerOffXboxControllersNow, _xboxServiceInstalled);
 
             _trayMenu.AddSeparator();
-            _trayMenu.AddHeader(Resources.MenuHeaderOnBpStart);
+            _trayMenu.AddHeader(Resources.MenuHeaderBluetooth);
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphBluetooth,
+                _btMenuItem.Text,
+                _btMenuItem.Checked,
+                _btMenuItem.Enabled,
+                () => Toggle(_btMenuItem, OnBluetoothMenuItemClick)
+            );
+        }
+
+        private void BuildOnBpStartPage()
+        {
+            AddPageHeader(Resources.MenuOnBpStart);
             _trayMenu.AddToggle(
                 TrayMenu.GlyphNightLight,
                 Resources.MenuNightLightTurnOffOnBpStart,
@@ -192,58 +268,26 @@ namespace BigPictureManager
                 true,
                 () => Toggle(_pauseMediaBpMenuItem, OnPauseMediaBpMenuItemClick)
             );
-
-            _trayMenu.AddSeparator();
-            _trayMenu.AddHeader(Resources.MenuHeaderOnBpExit);
-            _trayMenu.AddToggle(
-                TrayMenu.GlyphController,
-                Resources.MenuWirelessXboxController,
-                _xboxGipPowerOffMenuItem.Checked,
-                _xboxGipPowerOffMenuItem.Enabled,
-                () => Toggle(_xboxGipPowerOffMenuItem, OnXboxGipPowerOffMenuItemClick)
-            );
-            _trayMenu.AddToggle(
-                TrayMenu.GlyphBluetooth,
-                _btMenuItem.Text,
-                _btMenuItem.Checked,
-                _btMenuItem.Enabled,
-                () => Toggle(_btMenuItem, OnBluetoothMenuItemClick)
-            );
-
-            _trayMenu.AddSeparator();
-            _trayMenu.AddHeader(Resources.MenuHeaderController);
-            _trayMenu.AddToggle(
-                TrayMenu.GlyphController,
-                Resources.MenuFocusGameOnGuideDoublePress,
-                _focusGameOnGuideMenuItem.Checked,
-                true,
-                () => Toggle(_focusGameOnGuideMenuItem, OnFocusGameOnGuideMenuItemClick)
-            );
-
-            _trayMenu.AddSeparator();
-            _trayMenu.AddHeader(Resources.MenuHeaderApp);
-            _trayMenu.AddToggle(
-                TrayMenu.GlyphStartup,
-                Resources.MenuLaunchOnStart,
-                _launchOnStartMenuItem.Checked,
-                true,
-                () => Toggle(_launchOnStartMenuItem, OnLaunchOnStartMenuItemClick)
-            );
-            _trayMenu.AddNavigation(TrayMenu.GlyphSettings, Resources.MenuSettings, () => _menuPage = TrayMenuPage.Settings);
-            _trayMenu.AddAction(TrayMenu.GlyphExit, Resources.MenuExit, () => OnExit(this, EventArgs.Empty));
         }
 
         private void BuildSettingsPage()
         {
-            _trayMenu.AddTitle(Resources.MenuSettings);
-            _trayMenu.AddNavigation(TrayMenu.GlyphBack, Resources.MenuBack, () => _menuPage = TrayMenuPage.Main);
-            _trayMenu.AddSeparator();
+            AddPageHeader(Resources.MenuSettings);
 
             _trayMenu.AddHeader(Resources.MenuHeaderControllerService);
             _trayMenu.AddActionImage(
                 _shieldIcon,
                 _xboxServiceInstalled ? Resources.MenuRemoveControllerService : Resources.MenuInstallControllerService,
                 InstallOrRemoveXboxService
+            );
+
+            _trayMenu.AddSeparator();
+            _trayMenu.AddToggle(
+                TrayMenu.GlyphStartup,
+                Resources.MenuLaunchOnStart,
+                _launchOnStartMenuItem.Checked,
+                true,
+                () => Toggle(_launchOnStartMenuItem, OnLaunchOnStartMenuItemClick)
             );
 
             _trayMenu.AddSeparator();
@@ -321,6 +365,8 @@ namespace BigPictureManager
         {
             _xboxRedimTimer.Stop();
             _xboxRedimTimer.Dispose();
+            _displayRecheckTimer.Stop();
+            _displayRecheckTimer.Dispose();
             _deviceWatcher.Dispose();
             _bpWatcher.Dispose();
             _guideWatcher.Dispose();

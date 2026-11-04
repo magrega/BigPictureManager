@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using BigPictureManager.Properties;
 
 namespace BigPictureManager
@@ -14,7 +15,7 @@ namespace BigPictureManager
                 return;
             }
 
-            _xboxGipPowerOffMenuItem.Text = Resources.MenuWirelessXboxController;
+            _xboxGipPowerOffMenuItem.Text = Resources.MenuXboxTurnOffOnExit;
             _xboxGipPowerOffMenuItem.Enabled = _xboxServiceInstalled;
             _xboxGipPowerOffMenuItem.Checked = _xboxServiceInstalled && Settings.Default.isPowerOffXboxGipOnBpClose;
         }
@@ -28,6 +29,13 @@ namespace BigPictureManager
                     + (_xboxGipPowerOffMenuItem.Checked ? "enabled" : "disabled")
                     + " in settings."
             );
+        }
+
+        /// <summary>Powers off connected Xbox controllers right away through the installed power-off service.</summary>
+        private void PowerOffXboxControllersNow()
+        {
+            BpmLog.WriteLine("[Xbox] Power off requested from the tray menu.");
+            _ = Task.Run(() => XboxGipPowerOff.TriggerPowerOff());
         }
     }
 }

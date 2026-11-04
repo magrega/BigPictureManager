@@ -82,39 +82,57 @@ namespace BigPictureManager.Properties {
             }
         }
 
-        internal static string MenuHeaderAudio {
+        internal static string MenuAudio {
             get {
-                return ResourceManager.GetString("MenuHeaderAudio", resourceCulture);
+                return ResourceManager.GetString("MenuAudio", resourceCulture);
             }
         }
 
-        internal static string MenuHeaderOnBpStart {
+        internal static string MenuDisplay {
             get {
-                return ResourceManager.GetString("MenuHeaderOnBpStart", resourceCulture);
+                return ResourceManager.GetString("MenuDisplay", resourceCulture);
             }
         }
 
-        internal static string MenuHeaderOnBpExit {
+        internal static string MenuControllers {
             get {
-                return ResourceManager.GetString("MenuHeaderOnBpExit", resourceCulture);
+                return ResourceManager.GetString("MenuControllers", resourceCulture);
             }
         }
 
-        internal static string MenuHeaderController {
+        internal static string MenuOnBpStart {
             get {
-                return ResourceManager.GetString("MenuHeaderController", resourceCulture);
+                return ResourceManager.GetString("MenuOnBpStart", resourceCulture);
+            }
+        }
+
+        internal static string MenuHeaderXbox {
+            get {
+                return ResourceManager.GetString("MenuHeaderXbox", resourceCulture);
+            }
+        }
+
+        internal static string MenuHeaderBluetooth {
+            get {
+                return ResourceManager.GetString("MenuHeaderBluetooth", resourceCulture);
+            }
+        }
+
+        internal static string MenuXboxTurnOffOnExit {
+            get {
+                return ResourceManager.GetString("MenuXboxTurnOffOnExit", resourceCulture);
+            }
+        }
+
+        internal static string MenuXboxPowerOffNow {
+            get {
+                return ResourceManager.GetString("MenuXboxPowerOffNow", resourceCulture);
             }
         }
 
         internal static string MenuFocusGameOnGuideDoublePress {
             get {
                 return ResourceManager.GetString("MenuFocusGameOnGuideDoublePress", resourceCulture);
-            }
-        }
-
-        internal static string MenuHeaderApp {
-            get {
-                return ResourceManager.GetString("MenuHeaderApp", resourceCulture);
             }
         }
 
@@ -190,15 +208,39 @@ namespace BigPictureManager.Properties {
             }
         }
         
-        internal static string MenuWirelessXboxController {
-            get {
-                return ResourceManager.GetString("MenuWirelessXboxController", resourceCulture);
-            }
-        }
-        
         internal static string MsgAlreadyRunning {
             get {
                 return ResourceManager.GetString("MsgAlreadyRunning", resourceCulture);
+            }
+        }
+
+        internal static string MenuDisplayDontChange {
+            get {
+                return ResourceManager.GetString("MenuDisplayDontChange", resourceCulture);
+            }
+        }
+
+        internal static string MenuDisplayNotAvailable {
+            get {
+                return ResourceManager.GetString("MenuDisplayNotAvailable", resourceCulture);
+            }
+        }
+
+        internal static string MenuDisplayUnknownName {
+            get {
+                return ResourceManager.GetString("MenuDisplayUnknownName", resourceCulture);
+            }
+        }
+
+        internal static string MsgDisplayNotAvailable {
+            get {
+                return ResourceManager.GetString("MsgDisplayNotAvailable", resourceCulture);
+            }
+        }
+
+        internal static string MsgDisplayDisconnected {
+            get {
+                return ResourceManager.GetString("MsgDisplayDisconnected", resourceCulture);
             }
         }
 

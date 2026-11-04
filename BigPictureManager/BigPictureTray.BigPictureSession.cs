@@ -52,16 +52,38 @@ namespace BigPictureManager
                         );
                     }
 
-                    _prevDevice = _audio.GetCurrentDefault();
-                    if (_selectedDevice != null && !string.IsNullOrWhiteSpace(_selectedDevice.Id))
+                    if (string.IsNullOrEmpty(SelectedDisplayPath))
                     {
-                        _audio.SetDefault(_selectedDevice, "Big Picture opened");
+                        SwitchAudioForBigPicture();
+                    }
+                    else
+                    {
+                        // The TV's HDMI audio endpoint can appear only once its display is active, so switch audio after it.
+                        _ = Task.Run(() =>
+                        {
+                            ApplyBigPictureDisplay();
+                            _uiContext.Post(__ => SwitchAudioForBigPicture(), null);
+                        });
                     }
                 },
                 null
             );
 
             DiscoverAndDimXboxControllers();
+        }
+
+        private void SwitchAudioForBigPicture()
+        {
+            if (!_bigPictureActive)
+            {
+                return;
+            }
+
+            _prevDevice = _audio.GetCurrentDefault();
+            if (_selectedDevice != null && !string.IsNullOrWhiteSpace(_selectedDevice.Id))
+            {
+                _audio.SetDefault(_selectedDevice, "Big Picture opened");
+            }
         }
 
         private async void OnBigPictureClosed(object sender, EventArgs e)
@@ -71,7 +93,15 @@ namespace BigPictureManager
             {
                 BpmLog.WriteLine("[Main] Steam Big Picture Mode closed!");
                 _bigPictureActive = false;
-                _uiContext.Post(_ => _xboxRedimTimer.Stop(), null);
+                _uiContext.Post(
+                    _ =>
+                    {
+                        _xboxRedimTimer.Stop();
+                        _displayRecheckTimer.Stop();
+                    },
+                    null
+                );
+                _ = Task.Run(() => RestoreDisplaysAfterBigPicture());
                 _uiContext.Post(
                     _ =>
                     {
@@ -82,6 +112,9 @@ namespace BigPictureManager
                                 "Big Picture closed (restore previous default)"
                             );
                         }
+
+                        // Cleared so a session that closes before its audio switch doesn't restore a stale device.
+                        _prevDevice = null;
 
                         if (_restoreNightLightAfterBigPicture)
                         {
@@ -210,6 +243,7 @@ namespace BigPictureManager
             // Debounce: a single connect can raise several interface-arrival messages.
             _xboxRedimTimer.Stop();
             _xboxRedimTimer.Start();
+            RestartDisplayRecheck();
         }
 
         private void OnXboxRedimTick(object sender, EventArgs e)

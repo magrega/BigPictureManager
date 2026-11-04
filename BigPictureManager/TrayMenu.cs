@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -25,7 +26,11 @@ namespace BigPictureManager
         internal static readonly string GlyphExit = Glyph(0xE711);        // Cancel
         internal static readonly string GlyphSettings = Glyph(0xE713);    // Settings (gear)
         internal static readonly string GlyphBack = Glyph(0xE72B);        // Back
+        internal static readonly string GlyphDisplay = Glyph(0xE7F4);     // TVMonitor
+        internal static readonly string GlyphPlay = Glyph(0xE768);        // Play
+        internal static readonly string GlyphPowerOff = Glyph(0xE7E8);    // PowerButton
         private static readonly string GlyphCheck = Glyph(0xE73E);        // CheckMark
+        private static readonly string GlyphChevron = Glyph(0xE76C);      // ChevronRight
 
         private static string Glyph(int codePoint) => ((char)codePoint).ToString();
 
@@ -39,8 +44,12 @@ namespace BigPictureManager
             public string Text;
             public bool Enabled = true;
             public bool On;
+
+            /// <summary>Drawn switch position (0 = off, 1 = on); trails <see cref="On"/> while the slide runs.</summary>
+            public float Progress;
             public bool ClosesOnClick;
             public bool RebuildsOnClick;
+            public bool ShowsChevron;
             public Action OnClick;
             public int Top;
             public int Height;
@@ -48,7 +57,11 @@ namespace BigPictureManager
             public bool Interactive => Enabled && (Kind == RowKind.Action || Kind == RowKind.Toggle || Kind == RowKind.Radio);
         }
 
+        private const double SwitchSlideMs = 160;
+
         private readonly List<Row> _rows = new List<Row>();
+        private readonly Timer _animationTimer = new Timer { Interval = 15 };
+        private readonly Stopwatch _animationClock = new Stopwatch();
         private int _hoverIndex = -1;
 
         /// <summary>Rebuilds the rows from current app state (used by ShowAtCursor and drill-down navigation).</summary>
@@ -71,6 +84,7 @@ namespace BigPictureManager
             AutoScaleMode = AutoScaleMode.None;
             BackColor = TrayMenuTheme.Background;
             KeyPreview = true;
+            _animationTimer.Tick += OnAnimationTick;
         }
 
         protected override CreateParams CreateParams
@@ -96,8 +110,8 @@ namespace BigPictureManager
 
         public void AddSeparator() => _rows.Add(new Row { Kind = RowKind.Separator });
 
-        public void AddAction(string glyph, string text, Action onClick) =>
-            _rows.Add(new Row { Kind = RowKind.Action, Glyph = glyph, Text = text, OnClick = onClick, ClosesOnClick = true });
+        public void AddAction(string glyph, string text, Action onClick, bool enabled = true) =>
+            _rows.Add(new Row { Kind = RowKind.Action, Glyph = glyph, Text = text, Enabled = enabled, OnClick = onClick, ClosesOnClick = true });
 
         public void AddActionImage(Image icon, string text, Action onClick) =>
             _rows.Add(new Row { Kind = RowKind.Action, IconImage = icon, Text = text, OnClick = onClick, ClosesOnClick = true });
@@ -106,11 +120,16 @@ namespace BigPictureManager
         public void AddNavigation(string glyph, string text, Action onClick) =>
             _rows.Add(new Row { Kind = RowKind.Action, Glyph = glyph, Text = text, OnClick = onClick, RebuildsOnClick = true });
 
-        public void AddToggle(string glyph, string text, bool isOn, bool enabled, Action onClick) =>
-            _rows.Add(new Row { Kind = RowKind.Toggle, Glyph = glyph, Text = text, On = isOn, Enabled = enabled, OnClick = onClick });
+        /// <summary>A navigation row into a sub-page, marked with a chevron.</summary>
+        public void AddSubmenu(string glyph, string text, Action onClick) =>
+            _rows.Add(new Row { Kind = RowKind.Action, Glyph = glyph, Text = text, OnClick = onClick, RebuildsOnClick = true, ShowsChevron = true });
 
-        public void AddRadio(string text, bool selected, Action onClick) =>
-            _rows.Add(new Row { Kind = RowKind.Radio, Text = text, On = selected, OnClick = onClick });
+        public void AddToggle(string glyph, string text, bool isOn, bool enabled, Action onClick) =>
+            _rows.Add(new Row { Kind = RowKind.Toggle, Glyph = glyph, Text = text, On = isOn, Progress = isOn ? 1f : 0f, Enabled = enabled, OnClick = onClick });
+
+        /// <summary>A radio row; consecutive radio rows form one group, so separate groups with a header or separator.</summary>
+        public void AddRadio(string text, bool selected, Action onClick, bool enabled = true) =>
+            _rows.Add(new Row { Kind = RowKind.Radio, Text = text, On = selected, Enabled = enabled, OnClick = onClick });
 
         /// <summary>A non-interactive, disabled text row (e.g. an empty-state message).</summary>
         public void AddInfo(string text) =>
@@ -306,27 +325,34 @@ namespace BigPictureManager
 
             if (row.Kind == RowKind.Toggle)
             {
-                DrawSwitch(g, rowRect, row.On, row.Enabled);
+                DrawSwitch(g, rowRect, row.Progress, row.Enabled);
             }
             else if (row.Kind == RowKind.Radio && row.On)
             {
                 var checkRect = new Rectangle(rowRect.Right - Px(28), rowRect.Top, Px(24), rowRect.Height);
-                TextRenderer.DrawText(g, GlyphCheck, _checkFont, checkRect, TrayMenuTheme.Accent,
+                TextRenderer.DrawText(g, GlyphCheck, _checkFont, checkRect, iconColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            }
+            else if (row.ShowsChevron)
+            {
+                var chevronRect = new Rectangle(rowRect.Right - Px(28), rowRect.Top, Px(24), rowRect.Height);
+                TextRenderer.DrawText(g, GlyphChevron, _checkFont, chevronRect, TrayMenuTheme.HeaderText,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
         }
 
-        private void DrawSwitch(Graphics g, Rectangle rowRect, bool on, bool enabled)
+        private void DrawSwitch(Graphics g, Rectangle rowRect, float progress, bool enabled)
         {
             var w = Px(36);
             var h = Px(18);
             var x = rowRect.Right - w - Px(6);
             var y = rowRect.Top + (rowRect.Height - h) / 2;
             var track = new Rectangle(x, y, w, h);
+            var t = EaseInOut(progress);
 
             var trackColor = !enabled
                 ? TrayMenuTheme.SwitchOffDisabled
-                : (on ? TrayMenuTheme.Accent : TrayMenuTheme.SwitchOff);
+                : Blend(TrayMenuTheme.SwitchOff, TrayMenuTheme.Accent, t);
 
             using (var brush = new SolidBrush(trackColor))
             using (var path = Rounded(track, h / 2))
@@ -334,13 +360,65 @@ namespace BigPictureManager
                 g.FillPath(brush, path);
             }
 
+            // Float coordinates keep the knob gliding smoothly instead of stepping a whole pixel per frame.
             var knobSize = h - Px(4);
-            var knobX = on ? track.Right - knobSize - Px(2) : track.Left + Px(2);
-            var knob = new Rectangle(knobX, y + Px(2), knobSize, knobSize);
+            var travel = track.Width - knobSize - Px(4);
+            var knob = new RectangleF(track.Left + Px(2) + travel * t, y + Px(2), knobSize, knobSize);
             using (var knobBrush = new SolidBrush(Color.White))
             {
                 g.FillEllipse(knobBrush, knob);
             }
+        }
+
+        private void OnAnimationTick(object sender, EventArgs e)
+        {
+            // Advance by real elapsed time so the slide lasts the same regardless of timer jitter.
+            var step = (float)(_animationClock.Elapsed.TotalMilliseconds / SwitchSlideMs);
+            _animationClock.Restart();
+
+            var animating = false;
+            foreach (var row in _rows)
+            {
+                if (row.Kind != RowKind.Toggle)
+                {
+                    continue;
+                }
+
+                var target = row.On ? 1f : 0f;
+                row.Progress = target > row.Progress
+                    ? Math.Min(target, row.Progress + step)
+                    : Math.Max(target, row.Progress - step);
+                animating |= row.Progress != target;
+            }
+
+            Invalidate();
+            if (!animating)
+            {
+                _animationTimer.Stop();
+            }
+        }
+
+        private void StartSwitchAnimation()
+        {
+            if (!_animationTimer.Enabled)
+            {
+                _animationClock.Restart();
+                _animationTimer.Start();
+            }
+        }
+
+        private static float EaseInOut(float t)
+        {
+            return t < 0.5f ? 4 * t * t * t : 1 - (float)Math.Pow(-2 * t + 2, 3) / 2;
+        }
+
+        private static Color Blend(Color from, Color to, float t)
+        {
+            return Color.FromArgb(
+                (int)Math.Round(from.R + (to.R - from.R) * t),
+                (int)Math.Round(from.G + (to.G - from.G) * t),
+                (int)Math.Round(from.B + (to.B - from.B) * t)
+            );
         }
 
         private const TextFormatFlags LabelFlags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left
@@ -406,9 +484,14 @@ namespace BigPictureManager
                 return;
             }
 
-            // Toggle/radio: flip the displayed state instantly for snappy feedback, then apply the
-            // (now debounced) backend change without blocking. The menu stays open.
+            // Toggle/radio: flip the displayed state instantly for snappy feedback (switches slide to it),
+            // then apply the (now debounced) backend change without blocking. The menu stays open.
             ApplyInstantVisual(row);
+            if (row.Kind == RowKind.Toggle)
+            {
+                StartSwitchAnimation();
+            }
+
             Invalidate();
             Update();
             if (action != null)
@@ -452,12 +535,15 @@ namespace BigPictureManager
             }
             else if (row.Kind == RowKind.Radio)
             {
-                foreach (var r in _rows)
+                var index = _rows.IndexOf(row);
+                for (var i = index - 1; i >= 0 && _rows[i].Kind == RowKind.Radio; i--)
                 {
-                    if (r.Kind == RowKind.Radio)
-                    {
-                        r.On = false;
-                    }
+                    _rows[i].On = false;
+                }
+
+                for (var i = index + 1; i < _rows.Count && _rows[i].Kind == RowKind.Radio; i++)
+                {
+                    _rows[i].On = false;
                 }
 
                 row.On = true;
@@ -513,6 +599,7 @@ namespace BigPictureManager
         {
             if (disposing)
             {
+                _animationTimer.Dispose();
                 DisposeFonts();
             }
 

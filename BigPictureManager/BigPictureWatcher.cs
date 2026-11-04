@@ -18,6 +18,9 @@ namespace BigPictureManager
         /// <summary>Raised when the tracked Big Picture window closes.</summary>
         public event EventHandler Closed;
 
+        /// <summary>Handle of the open Big Picture window, or <see cref="IntPtr.Zero"/> when none is tracked.</summary>
+        public IntPtr WindowHandle { get; private set; }
+
         /// <summary>Begins listening for the Big Picture window to open.</summary>
         public void Start()
         {
@@ -37,6 +40,15 @@ namespace BigPictureManager
             }
 
             _targetWindow = sender as AutomationElement;
+            try
+            {
+                WindowHandle = new IntPtr(_targetWindow.Current.NativeWindowHandle);
+            }
+            catch (ElementNotAvailableException)
+            {
+                WindowHandle = IntPtr.Zero;
+            }
+
             Automation.AddAutomationEventHandler(
                 eventId: WindowPattern.WindowClosedEvent,
                 element: _targetWindow,
@@ -49,6 +61,7 @@ namespace BigPictureManager
 
         private void OnWindowClosed(object sender, AutomationEventArgs e)
         {
+            WindowHandle = IntPtr.Zero;
             Closed?.Invoke(this, EventArgs.Empty);
         }
 
